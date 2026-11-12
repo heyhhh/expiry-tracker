@@ -70,6 +70,9 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <h2>바코드 스캔</h2>
   <div id="reader"></div>
   <p class="hint">제품 뒷면 바코드를 화면 중앙에 맞춰주세요. (HTTPS 필요)</p>
+  <div class="btns"><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
+  <p class="hint">실시간 초점이 안 맞으면 "사진으로 인식"을 눌러 기본 카메라로 바코드를 찍어주세요. 바코드에서 15~20cm 떨어지면 초점이 잘 맞습니다.</p>
+  <div id="fileReader" hidden></div>
   <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
   <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
 </div></dialog>
@@ -202,7 +205,10 @@ async function startScan(){
   $('dScan').showModal(); $('manualCode').value = '';
   try{
     scanner = new Html5Qrcode('reader', {formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128]});
-    await scanner.start({facingMode:'environment'}, {fps:10, qrbox:{width:250,height:140}}, code => handleCode(code), () => {});
+    await scanner.start({facingMode:'environment', width:{ideal:1920}, height:{ideal:1080}},
+      {fps:10, qrbox:{width:280,height:160}, experimentalFeatures:{useBarCodeDetectorIfSupported:true}},
+      code => handleCode(code), () => {});
+    try{ await scanner.applyVideoConstraints({focusMode:'continuous', advanced:[{focusMode:'continuous'}]}); }catch{}
   }catch(err){ toast('카메라를 열 수 없습니다. 직접 입력해 주세요.'); }
 }
 async function stopScan(){
@@ -217,6 +223,15 @@ async function handleCode(code){
 }
 $('btnAdd').onclick = startScan;
 $('scanClose').onclick = stopScan;
+$('scanFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  try{ if (scanner){ await scanner.stop(); scanner.clear(); scanner = null; } }catch{}
+  try{
+    const fr = new Html5Qrcode('fileReader');
+    const code = await fr.scanFile(f, false); fr.clear();
+    handleCode(code);
+  }catch{ toast('바코드를 읽지 못했습니다. 더 가까이/선명하게 다시 찍어주세요.'); startScan(); }
+};
 $('scanSkip').onclick = async () => { await stopScan(); openForm(null, {}); };
 $('scanManual').onclick = () => { const c = $('manualCode').value.trim(); if (c) handleCode(c); };
 
