@@ -45,7 +45,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
 .btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
 .btn.dng{color:var(--red)}
 .quick{display:flex;gap:6px;flex-wrap:wrap}.quick button{font-size:13px;padding:6px 10px;border-radius:99px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
-#reader{width:100%;border-radius:12px;overflow:hidden}
+#cam{width:100%;max-height:48vh;border-radius:12px;background:#000;object-fit:cover}
 .hint{font-size:12px;color:var(--sub)}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;display:none;z-index:20}
 </style>
@@ -68,12 +68,11 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
 <!-- 스캔 -->
 <dialog id="dScan"><div class="sheet">
   <h2>바코드 스캔</h2>
-  <div id="reader"></div>
+  <video id="cam" playsinline muted autoplay></video>
   <p class="hint">제품 뒷면 바코드를 화면 중앙에 맞춰주세요. (HTTPS 필요)</p>
   <div class="btns"><button type="button" class="btn" id="lensBtn">🔄 렌즈 전환</button><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
   <p class="hint">실시간 초점이 안 맞으면 "사진으로 인식"을 눌러 기본 카메라로 바코드를 찍어주세요. 바코드에서 15~20cm 떨어지면 초점이 잘 맞습니다.</p>
-  <div id="fileReader" hidden></div>
-  <p class="hint" id="camInfo">v9</p>
+  <p class="hint" id="camInfo">v10</p>
   <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
   <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
 </div></dialog>
@@ -119,7 +118,6 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <p class="hint">알림은 현재 앱을 열었을 때 만료 임박 항목을 알려주는 방식입니다. 앱이 꺼져 있을 때의 푸시는 서버 단계에서 추가합니다.</p>
 </div></dialog>
 
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -135,7 +133,7 @@ let cfg = {...DEFAULTS, ...store.get('cfg', {})};
 if (!cfg.sbUrl) cfg.sbUrl = DEFAULTS.sbUrl; if (!cfg.sbKey) cfg.sbKey = DEFAULTS.sbKey;
 // 설정 링크(#h=공유코드)로 열면 공유 코드를 자동 복원
 try{ const m = location.hash.match(/[#&]h=([^&]+)/); if (m){ cfg.hh = decodeURIComponent(m[1]); store.set('cfg', cfg); history.replaceState(null, '', location.pathname + location.search); } }catch{}
-let filter = '전체', editing = null, scanner = null, sb = null;
+let filter = '전체', editing = null, sb = null;
 
 const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
 const dday = s => Math.round((new Date(s+'T00:00:00') - today())/864e5);
@@ -256,36 +254,58 @@ async function lookup(code){
   return null;
 }
 
-/* ---------- 스캔 ---------- */
-let cams = [], camIdx = -1;
+/* ---------- 스캔 (barcode-detector: 브라우저 내장 → zxing-cpp wasm 폴백) ---------- */
+const FORMATS = ['ean_13','ean_8','upc_a','upc_e','code_128'];
+let nativeDet = null, wasmDet = null, stream = null, scanning = false, cams = [], camIdx = -1;
+async function nativeDetector(){
+  if (nativeDet !== null) return nativeDet || null;
+  try{ if ('BarcodeDetector' in window){ nativeDet = new BarcodeDetector({formats:FORMATS}); return nativeDet; } }catch{}
+  nativeDet = false; return null;
+}
+async function wasmDetector(){
+  if (wasmDet) return wasmDet;
+  const m = await import('https://cdn.jsdelivr.net/npm/barcode-detector@2.3.1/+esm');
+  wasmDet = new m.BarcodeDetector({formats:FORMATS}); return wasmDet;
+}
+// 사진/프레임에서 바코드 값 읽기: 내장 인식기 → wasm 인식기 순서
+async function decode(src, tryWasm = true){
+  const nd = await nativeDetector();
+  if (nd){ try{ const r = await nd.detect(src); if (r.length) return r[0].rawValue; }catch{} }
+  if (tryWasm){ try{ const r = await (await wasmDetector()).detect(src); if (r.length) return r[0].rawValue; }catch(e){ console.error(e); } }
+  return null;
+}
+function stopStream(){
+  scanning = false;
+  try{ stream && stream.getTracks().forEach(t => t.stop()); }catch{}
+  stream = null; try{ $('cam').srcObject = null; }catch{}
+}
 async function startScan(deviceId){
   if (typeof deviceId !== 'string') deviceId = null;
   if (!$('dScan').open) $('dScan').showModal();
-  $('manualCode').value = '';
-  try{ if (scanner){ await scanner.stop(); scanner.clear(); scanner = null; } }catch{}
-  try{ if (!cams.length) cams = await Html5Qrcode.getCameras(); }catch{}   // 시작 전에 조회 (시작 후 조회하면 영상이 끊길 수 있음)
-  $('camInfo').textContent = `v9 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
-  const fmts = {formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128]};
-  const base = deviceId ? {deviceId:{exact:deviceId}} : {facingMode:'environment'};
-  const attempts = [
-    [{...base, width:{ideal:1920}, height:{ideal:1080}}, {fps:10, qrbox:{width:280,height:160}, experimentalFeatures:{useBarCodeDetectorIfSupported:true}}],
-    [base, {fps:10, qrbox:{width:280,height:160}}]
-  ];
-  let ok = false, lastErr = '';
-  for (const [cam, conf] of attempts){
-    try{
-      scanner = new Html5Qrcode('reader', fmts);
-      await scanner.start(cam, conf, code => handleCode(code), () => {});
-      ok = true; break;
-    }catch(err){ lastErr = String(err && err.message || err); try{ scanner.clear(); }catch{} scanner = null; }
+  $('manualCode').value = ''; stopStream();
+  const base = deviceId ? {deviceId:{exact:deviceId}} : {facingMode:{ideal:'environment'}};
+  let lastErr = '';
+  for (const v of [{...base, width:{ideal:1920}, height:{ideal:1080}}, base]){
+    try{ stream = await navigator.mediaDevices.getUserMedia({video:v, audio:false}); break; }catch(e){ lastErr = String(e && e.name || e); }
   }
-  if (!ok){ toast('카메라 오류: ' + lastErr.slice(0,60) + ' — 사진으로 인식을 이용하세요.'); $('camInfo').textContent += ' | 오류: ' + lastErr; return; }
-  try{ await scanner.applyVideoConstraints({advanced:[{focusMode:'continuous'}]}); }catch{}
+  if (!stream){ toast('카메라를 열 수 없습니다 (' + lastErr + '). 사진으로 인식을 이용하세요.'); $('camInfo').textContent = 'v10 · 카메라 오류: ' + lastErr; return; }
+  const track = stream.getVideoTracks()[0];
+  try{ await track.applyConstraints({advanced:[{focusMode:'continuous'}]}); }catch{}
+  $('cam').srcObject = stream; try{ await $('cam').play(); }catch{}
+  try{ cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); }catch{}
+  $('camInfo').textContent = `v10 · 카메라 ${cams.length}개: ` + cams.map(c => c.label || '이름없음').join(' / ');
+  scanning = true;
+  wasmDetector().catch(() => {});   // 미리 로드
+  const mine = stream, tick = async () => {
+    if (!scanning || stream !== mine) return;
+    try{
+      if ($('cam').readyState >= 2){ const code = await decode($('cam')); if (code && scanning && stream === mine){ scanning = false; return handleCode(code); } }
+    }catch{}
+    setTimeout(tick, 120);
+  };
+  tick();
 }
-async function stopScan(){
-  try{ if (scanner){ await scanner.stop(); scanner.clear(); } }catch{}
-  scanner = null; $('dScan').close();
-}
+async function stopScan(){ stopStream(); if ($('dScan').open) $('dScan').close(); }
 async function handleCode(code){
   await stopScan(); toast('제품 조회 중…');
   const info = await lookup(code);
@@ -295,28 +315,25 @@ async function handleCode(code){
 $('btnAdd').onclick = () => startScan();
 $('scanClose').onclick = stopScan;
 $('lensBtn').onclick = () => {
-  if (cams.length < 2){ toast('이 브라우저는 렌즈를 1개만 제공합니다. Chrome으로 열거나 "사진으로 인식"을 쓰세요.'); return; }
   const back = cams.filter(c => !/front|전면/i.test(c.label)); const list = back.length ? back : cams;
+  if (list.length < 2){ toast('이 브라우저는 렌즈를 1개만 제공합니다. Chrome으로 열거나 "사진으로 인식"을 쓰세요.'); return; }
   camIdx = (camIdx + 1) % list.length; toast(`렌즈 ${camIdx+1}/${list.length}: ${list[camIdx].label||''}`);
-  startScan(list[camIdx].id);
+  startScan(list[camIdx].deviceId);
 };
-async function shrink(file, max=1600){
-  const bmp = await createImageBitmap(file); const k = Math.min(1, max/Math.max(bmp.width,bmp.height));
+async function shrinkBmp(bmp, max){
+  const k = Math.min(1, max/Math.max(bmp.width,bmp.height)); if (k === 1) return bmp;
   const c = document.createElement('canvas'); c.width = Math.round(bmp.width*k); c.height = Math.round(bmp.height*k);
-  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
-  return new Promise(r => c.toBlob(b => r(new File([b],'scan.jpg',{type:'image/jpeg'})),'image/jpeg',.92));
+  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height); return createImageBitmap(c);
 }
 $('scanFile').onchange = async e => {
   const f = e.target.files[0]; if (!f) return; e.target.value = '';
-  toast('사진 인식 중…');
-  try{ if (scanner){ await scanner.stop(); scanner.clear(); scanner = null; } }catch{}
+  toast('사진 인식 중…'); stopStream();
   let code = null;
   try{
-    const fr = new Html5Qrcode('fileReader', {formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128]});
-    for (const src of [await shrink(f,1600), await shrink(f,1000), f]){
-      try{ code = await fr.scanFile(src, false); break; }catch{}
+    const bmp = await createImageBitmap(f);
+    for (const max of [4000, 2400, 1400]){      // 원본 → 줄인 버전 순서로 시도
+      code = await decode(await shrinkBmp(bmp, max)); if (code) break;
     }
-    fr.clear();
   }catch(err){ console.error(err); }
   if (code) return handleCode(code);
   toast('바코드를 읽지 못했습니다. 바코드만 크게 찍거나 아래에 숫자를 직접 입력하세요.');
