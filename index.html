@@ -73,7 +73,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <div class="btns"><button type="button" class="btn" id="lensBtn">🔄 렌즈 전환</button><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
   <p class="hint">실시간 초점이 안 맞으면 "사진으로 인식"을 눌러 기본 카메라로 바코드를 찍어주세요. 바코드에서 15~20cm 떨어지면 초점이 잘 맞습니다.</p>
   <div id="fileReader" hidden></div>
-  <p class="hint" id="camInfo">v5</p>
+  <p class="hint" id="camInfo">v6</p>
   <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
   <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
 </div></dialog>
@@ -209,15 +209,24 @@ async function startScan(deviceId){
   if (!$('dScan').open) $('dScan').showModal();
   $('manualCode').value = '';
   try{ if (scanner){ await scanner.stop(); scanner.clear(); scanner = null; } }catch{}
-  try{
-    scanner = new Html5Qrcode('reader', {formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128]});
-    await scanner.start(deviceId ? {deviceId:{exact:deviceId}, width:{ideal:1920}, height:{ideal:1080}} : {facingMode:'environment', width:{ideal:1920}, height:{ideal:1080}},
-      {fps:10, qrbox:{width:280,height:160}, experimentalFeatures:{useBarCodeDetectorIfSupported:true}},
-      code => handleCode(code), () => {});
-    try{ await scanner.applyVideoConstraints({focusMode:'continuous', advanced:[{focusMode:'continuous'}]}); }catch{}
-    try{ if (!cams.length) cams = await Html5Qrcode.getCameras(); }catch{}
-    $('camInfo').textContent = `v5 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
-  }catch(err){ toast('카메라를 열 수 없습니다. 직접 입력해 주세요.'); }
+  try{ if (!cams.length) cams = await Html5Qrcode.getCameras(); }catch{}   // 시작 전에 조회 (시작 후 조회하면 영상이 끊길 수 있음)
+  $('camInfo').textContent = `v6 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
+  const fmts = {formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128]};
+  const base = deviceId ? {deviceId:{exact:deviceId}} : {facingMode:'environment'};
+  const attempts = [
+    [{...base, width:{ideal:1920}, height:{ideal:1080}}, {fps:10, qrbox:{width:280,height:160}, experimentalFeatures:{useBarCodeDetectorIfSupported:true}}],
+    [base, {fps:10, qrbox:{width:280,height:160}}]
+  ];
+  let ok = false, lastErr = '';
+  for (const [cam, conf] of attempts){
+    try{
+      scanner = new Html5Qrcode('reader', fmts);
+      await scanner.start(cam, conf, code => handleCode(code), () => {});
+      ok = true; break;
+    }catch(err){ lastErr = String(err && err.message || err); try{ scanner.clear(); }catch{} scanner = null; }
+  }
+  if (!ok){ toast('카메라 오류: ' + lastErr.slice(0,60) + ' — 사진으로 인식을 이용하세요.'); $('camInfo').textContent += ' | 오류: ' + lastErr; return; }
+  try{ await scanner.applyVideoConstraints({advanced:[{focusMode:'continuous'}]}); }catch{}
 }
 async function stopScan(){
   try{ if (scanner){ await scanner.stop(); scanner.clear(); } }catch{}
