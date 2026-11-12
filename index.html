@@ -73,7 +73,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <div class="btns"><button type="button" class="btn" id="lensBtn">🔄 렌즈 전환</button><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
   <p class="hint">실시간 초점이 안 맞으면 "사진으로 인식"을 눌러 기본 카메라로 바코드를 찍어주세요. 바코드에서 15~20cm 떨어지면 초점이 잘 맞습니다.</p>
   <div id="fileReader" hidden></div>
-  <p class="hint" id="camInfo">v6</p>
+  <p class="hint" id="camInfo">v7</p>
   <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
   <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
 </div></dialog>
@@ -113,6 +113,8 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <label>공유 코드 (길고 추측 어렵게)<input id="sbHh" placeholder="예: kim-family-7f3a9c2e"></label>
   <label>식약처 API 키 (선택, 추후 프록시용)<input id="mfdsKey" disabled placeholder="브라우저 직접 호출 불가 — 2차 단계"></label>
   <label>알림 기준 (일 전)<input id="notiDays" value="3" type="number" min="0"></label>
+  <div class="btns"><button class="btn" id="copyLink">🔗 설정 링크 복사</button></div>
+  <p class="hint">링크를 북마크해 두면 데이터를 지워도 링크를 열기만 하면 공유 코드가 복원됩니다. 링크에 공유 코드가 들어 있으니 남에게 보내지 마세요.</p>
   <div class="btns"><button class="btn" id="notiPerm">알림 권한 허용</button><button class="btn pri" id="setSave">저장</button><button class="btn" id="setClose">닫기</button></div>
   <p class="hint">알림은 현재 앱을 열었을 때 만료 임박 항목을 알려주는 방식입니다. 앱이 꺼져 있을 때의 푸시는 서버 단계에서 추가합니다.</p>
 </div></dialog>
@@ -127,7 +129,12 @@ const store = {
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
 };
 let items = store.get('items', []);
-let cfg = store.get('cfg', {sbUrl:'', sbKey:'', hh:'', notiDays:3});
+// URL과 publishable 키는 공개 전제의 값이라 기본값으로 내장 (비밀은 공유 코드뿐)
+const DEFAULTS = {sbUrl:'https://nnrzjgsjwgykafawtimt.supabase.co', sbKey:'sb_publishable_vfmo-2H6jIbNlx6FCezYkw_5ohw1y0n', hh:'', notiDays:3};
+let cfg = {...DEFAULTS, ...store.get('cfg', {})};
+if (!cfg.sbUrl) cfg.sbUrl = DEFAULTS.sbUrl; if (!cfg.sbKey) cfg.sbKey = DEFAULTS.sbKey;
+// 설정 링크(#h=공유코드)로 열면 공유 코드를 자동 복원
+try{ const m = location.hash.match(/[#&]h=([^&]+)/); if (m){ cfg.hh = decodeURIComponent(m[1]); store.set('cfg', cfg); history.replaceState(null, '', location.pathname + location.search); } }catch{}
 let filter = '전체', editing = null, scanner = null, sb = null;
 
 const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
@@ -210,7 +217,7 @@ async function startScan(deviceId){
   $('manualCode').value = '';
   try{ if (scanner){ await scanner.stop(); scanner.clear(); scanner = null; } }catch{}
   try{ if (!cams.length) cams = await Html5Qrcode.getCameras(); }catch{}   // 시작 전에 조회 (시작 후 조회하면 영상이 끊길 수 있음)
-  $('camInfo').textContent = `v6 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
+  $('camInfo').textContent = `v7 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
   const fmts = {formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128]};
   const base = deviceId ? {deviceId:{exact:deviceId}} : {facingMode:'environment'};
   const attempts = [
@@ -332,6 +339,11 @@ $('setClose').onclick = () => $('dSet').close();
 $('setSave').onclick = () => {
   cfg = {sbUrl:$('sbUrl').value.trim(), sbKey:$('sbKey').value.trim(), hh:$('sbHh').value.trim(), notiDays:Number($('notiDays').value)||0};
   store.set('cfg', cfg); $('dSet').close(); initSb(); sync(true);
+};
+$('copyLink').onclick = async () => {
+  const hh = $('sbHh').value.trim() || cfg.hh; if (!hh) return toast('공유 코드를 먼저 입력하세요');
+  const link = location.origin + location.pathname + '#h=' + encodeURIComponent(hh);
+  try{ await navigator.clipboard.writeText(link); toast('링크 복사됨 — 북마크/메모에 보관하세요'); }catch{ prompt('이 링크를 복사해 보관하세요', link); }
 };
 $('notiPerm').onclick = async () => {
   if (!('Notification' in window)) return toast('이 브라우저는 알림을 지원하지 않습니다. (아이폰은 홈 화면에 추가 후 사용)');
