@@ -73,7 +73,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <div class="btns"><button type="button" class="btn" id="lensBtn">🔄 렌즈 전환</button><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
   <p class="hint">실시간 초점이 안 맞으면 "사진으로 인식"을 눌러 기본 카메라로 바코드를 찍어주세요. 바코드에서 15~20cm 떨어지면 초점이 잘 맞습니다.</p>
   <div id="fileReader" hidden></div>
-  <p class="hint" id="camInfo">v7</p>
+  <p class="hint" id="camInfo">v8</p>
   <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
   <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
 </div></dialog>
@@ -166,6 +166,50 @@ function render(){
 $('chips').onclick = e => { const c = e.target.dataset.c; if (c){ filter = c; render(); } };
 $('list').onclick = e => { const el = e.target.closest('.card'); if (el) openForm(items.find(i => i.id === el.dataset.id)); };
 
+
+/* ---------- 영문/로마자 → 한글 ---------- */
+const BRANDS = {'ottogi':'오뚜기','ottugi':'오뚜기','nongshim':'농심','samyang':'삼양','paldo':'팔도','lotte':'롯데','orion':'오리온','haitai':'해태','crown':'크라운','binggrae':'빙그레','maeil':'매일','seoul milk':'서울우유','cj':'CJ','cj cheiljedang':'CJ제일제당','daesang':'대상','sempio':'샘표','pulmuone':'풀무원','dongwon':'동원','sajo':'사조','haechandle':'해찬들','chungjungone':'청정원','nestle':'네슬레','coca-cola':'코카콜라','pepsi':'펩시','lotte chilsung':'롯데칠성','gwangdong':'광동','dongsuh':'동서','namyang':'남양','ildong':'일동','hite jinro':'하이트진로','jinro':'진로','yakult':'야쿠르트','korea yakult':'한국야쿠르트','bibigo':'비비고'};
+const WORDS = {'jin':'진','shin':'신','ramyun':'라면','ramyeon':'라면','ramen':'라면','bibim':'비빔','bibimmyeon':'비빔면','myeon':'면','myun':'면','jjajang':'짜장','jjajangmyeon':'짜장면','jjamppong':'짬뽕','kimchi':'김치','cup':'컵','spicy':'매운','hot':'핫','original':'오리지널','milk':'우유','yogurt':'요거트','yoghurt':'요거트','cheese':'치즈','chocolate':'초콜릿','cookie':'쿠키','cookies':'쿠키','snack':'스낵','chicken':'치킨','beef':'소고기','pork':'돼지고기','tuna':'참치','tofu':'두부','rice':'쌀','sauce':'소스','noodle':'면','noodles':'면','soup':'국','kimbap':'김밥','mandu':'만두','dumpling':'만두','dumplings':'만두','gochujang':'고추장','doenjang':'된장','ganjang':'간장','ddeokbokki':'떡볶이','tteokbokki':'떡볶이','seaweed':'김','laver':'김','gim':'김','coffee':'커피','tea':'차','juice':'주스','water':'물','sweet':'달콤한','cream':'크림','butter':'버터','egg':'계란','eggs':'계란','bread':'빵','cake':'케이크','jelly':'젤리','candy':'사탕','potato':'감자','corn':'옥수수','apple':'사과','orange':'오렌지','grape':'포도','strawberry':'딸기','banana':'바나나','sausage':'소시지','ham':'햄','bean':'콩','beans':'콩','sesame':'참깨','oil':'오일','vinegar':'식초','salt':'소금','sugar':'설탕','chips':'칩','chip':'칩','plus':'플러스','zero':'제로','light':'라이트','diet':'다이어트'};
+const CHO = {g:0,kk:1,n:2,d:3,tt:4,r:5,l:5,m:6,b:7,pp:8,s:9,ss:10,j:12,jj:13,ch:14,k:15,t:16,p:17,h:18};
+const VOWS = [['yae',3],['yeo',6],['wae',10],['eo',4],['eu',18],['ae',1],['ya',2],['ye',7],['wa',9],['oe',11],['yo',12],['wo',14],['we',15],['wi',16],['yu',17],['ui',19],['a',0],['e',5],['o',8],['u',13],['i',20]];
+const JONG = {k:1,g:1,n:4,d:7,t:7,l:8,r:8,m:16,b:17,p:17,ng:21,s:19};
+const CHOK = Object.keys(CHO).sort((a,b) => b.length - a.length);
+function romToHangul(word){
+  const w = word.toLowerCase(); if (!/^[a-z]+$/.test(w)) return null;
+  const vowAt = i => VOWS.find(([v]) => w.startsWith(v, i));
+  let i = 0, out = '';
+  while (i < w.length){
+    let ini = 11;
+    const k = CHOK.find(k => w.startsWith(k, i) && vowAt(i + k.length));
+    if (k){ ini = CHO[k]; i += k.length; }
+    const v = vowAt(i); if (!v) return null; i += v[0].length;
+    let j = i; while (j < w.length && !'aeiouyw'.includes(w[j])) j++;
+    const run = w.slice(i, j); let fin = 0;
+    if (run){
+      if (j >= w.length){ fin = JONG[run]; if (fin == null) return null; i = j; }
+      else if (run.length === 1) fin = 0;
+      else if (CHO[run] != null && run.length === 2) fin = 0;
+      else if (run.startsWith('ng')){ fin = 21; i += 2; }
+      else { fin = JONG[run[0]]; if (fin == null) return null; i += 1; }
+    }
+    out += String.fromCharCode(0xAC00 + (ini*21 + v[1])*28 + fin);
+  }
+  return out;
+}
+const looksKorean = w => /(eo|eu|yeo|kk|tt|jj|mm|nn|ssa|gyeo|hyeo)/i.test(w);
+function toKorean(text){
+  if (!text) return text;
+  const t = text.trim(), whole = BRANDS[t.toLowerCase().replace(/[.,]+$/,'')];
+  if (whole) return whole;
+  return t.replace(/[A-Za-z]+/g, w => {
+    const l = w.toLowerCase();
+    if (BRANDS[l]) return BRANDS[l];
+    if (WORDS[l]) return WORDS[l];
+    if (looksKorean(l)){ const h = romToHangul(l); if (h) return h; }
+    return w;
+  }).replace(/(^|\s)([가-힣]) ([가-힣])/g, '$1$2$3');
+}
+
 /* ---------- 카테고리 추정 ---------- */
 function guessCategory(tags, name){
   const t = (tags||[]).join(' ').toLowerCase() + ' ' + (name||'');
@@ -177,8 +221,8 @@ function guessCategory(tags, name){
     ['냉동식품', /frozen|냉동|만두/],
     ['음료', /beverage|drink|juice|water|soda|coffee|tea|음료|주스|커피|차$|탄산/],
     ['과자/간식', /snack|biscuit|cookie|chocolate|candy|cereal|과자|스낵|초콜릿|젤리|빵|쿠키/],
-    ['소스/양념', /sauce|condiment|spice|oil|소스|양념|장$|간장|고추장|케첩|오일|식초/],
-    ['가공식품', /noodle|ramen|canned|instant|soup|라면|면|통조림|즉석|국|죽|카레|밥/]
+    ['소스/양념', /sauce|condiment|spice|oil|gochujang|doenjang|ganjang|소스|양념|장$|간장|고추장|된장|케첩|오일|식초/],
+    ['가공식품', /noodle|ramen|ramyun|myeon|bibim|jjajang|kimchi|canned|instant|soup|라면|면|통조림|즉석|국|죽|카레|밥|김치|만두|떡/]
   ];
   for (const [c, re] of map) if (re.test(t)) return c;
   return '기타';
@@ -202,8 +246,9 @@ async function lookup(code){
     const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_ko,brands,categories_tags`, {signal:ctl2.signal});
     const j = await r.json();
     if (j.status === 1 && j.product){
-      const p = j.product, name = p.product_name_ko || p.product_name || '';
-      return {name, brand:(p.brands||'').split(',')[0].trim(), category:guessCategory(p.categories_tags, name), src:'Open Food Facts'};
+      const p = j.product, raw = p.product_name_ko || p.product_name || '', rawBrand = (p.brands||'').split(',')[0].trim();
+      const name = toKorean(raw), brand = toKorean(rawBrand);
+      return {name, brand, category:guessCategory(p.categories_tags, raw + ' ' + name), src:'Open Food Facts'};
     }
   }catch{}
   return null;
@@ -217,7 +262,7 @@ async function startScan(deviceId){
   $('manualCode').value = '';
   try{ if (scanner){ await scanner.stop(); scanner.clear(); scanner = null; } }catch{}
   try{ if (!cams.length) cams = await Html5Qrcode.getCameras(); }catch{}   // 시작 전에 조회 (시작 후 조회하면 영상이 끊길 수 있음)
-  $('camInfo').textContent = `v7 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
+  $('camInfo').textContent = `v8 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
   const fmts = {formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128]};
   const base = deviceId ? {deviceId:{exact:deviceId}} : {facingMode:'environment'};
   const attempts = [
