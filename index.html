@@ -70,9 +70,10 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <h2>바코드 스캔</h2>
   <div id="reader"></div>
   <p class="hint">제품 뒷면 바코드를 화면 중앙에 맞춰주세요. (HTTPS 필요)</p>
-  <div class="btns"><button type="button" class="btn" id="lensBtn" style="display:none">🔄 렌즈 전환</button><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
+  <div class="btns"><button type="button" class="btn" id="lensBtn">🔄 렌즈 전환</button><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
   <p class="hint">실시간 초점이 안 맞으면 "사진으로 인식"을 눌러 기본 카메라로 바코드를 찍어주세요. 바코드에서 15~20cm 떨어지면 초점이 잘 맞습니다.</p>
   <div id="fileReader" hidden></div>
+  <p class="hint" id="camInfo">v4</p>
   <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
   <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
 </div></dialog>
@@ -214,7 +215,7 @@ async function startScan(deviceId){
       code => handleCode(code), () => {});
     try{ await scanner.applyVideoConstraints({focusMode:'continuous', advanced:[{focusMode:'continuous'}]}); }catch{}
     try{ if (!cams.length) cams = await Html5Qrcode.getCameras(); }catch{}
-    $('lensBtn').style.display = cams.length > 1 ? '' : 'none';
+    $('camInfo').textContent = `v4 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
   }catch(err){ toast('카메라를 열 수 없습니다. 직접 입력해 주세요.'); }
 }
 async function stopScan(){
@@ -230,6 +231,7 @@ async function handleCode(code){
 $('btnAdd').onclick = () => startScan();
 $('scanClose').onclick = stopScan;
 $('lensBtn').onclick = () => {
+  if (cams.length < 2){ toast('이 브라우저는 렌즈를 1개만 제공합니다. Chrome으로 열거나 "사진으로 인식"을 쓰세요.'); return; }
   const back = cams.filter(c => !/front|전면/i.test(c.label)); const list = back.length ? back : cams;
   camIdx = (camIdx + 1) % list.length; toast(`렌즈 ${camIdx+1}/${list.length}: ${list[camIdx].label||''}`);
   startScan(list[camIdx].id);
