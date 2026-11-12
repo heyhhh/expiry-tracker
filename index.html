@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2f7d5b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>유통기한 지킴이</title>
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--ink:#1d2433;--sub:#6b7385;--line:#e5e8ee;--brand:#2f7d5b;--brand-ink:#fff;
+--red:#d64545;--org:#e08a1e;--grn:#2f7d5b;--gry:#9aa1b0}
+@media(prefers-color-scheme:dark){:root{--bg:#12151c;--card:#1b202a;--ink:#eef1f6;--sub:#98a1b3;--line:#2a3140;--brand:#3fa47a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;padding-bottom:96px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:max(12px,env(safe-area-inset-top)) 16px 8px;border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;justify-content:space-between;max-width:900px;margin:0 auto}
+h1{font-size:20px;margin:0}
+.iconbtn{background:none;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:6px 10px;font-size:14px;cursor:pointer}
+.summary{display:flex;gap:8px;max-width:900px;margin:10px auto 0}
+.sum{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.sum b{display:block;font-size:20px}.sum span{font-size:12px;color:var(--sub)}
+.chips{display:flex;gap:6px;overflow-x:auto;max-width:900px;margin:10px auto 0;padding-bottom:4px;scrollbar-width:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:6px 12px;font-size:14px;cursor:pointer}
+.chip.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+main{max-width:900px;margin:0 auto;padding:12px 16px;display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;gap:12px;align-items:center;cursor:pointer}
+.dd{flex:none;width:62px;text-align:center;border-radius:12px;padding:8px 0;color:#fff;font-weight:700}
+.dd small{display:block;font-weight:400;font-size:11px;opacity:.9}
+.info{min-width:0;flex:1}.info .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.info .m{font-size:13px;color:var(--sub);margin-top:2px}
+.qty{flex:none;font-size:13px;color:var(--sub)}
+.empty{grid-column:1/-1;text-align:center;color:var(--sub);padding:48px 0}
+.fab{position:fixed;right:20px;bottom:max(20px,env(safe-area-inset-bottom));background:var(--brand);color:#fff;border:0;border-radius:99px;padding:16px 22px;font-size:16px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}
+dialog{border:0;border-radius:18px;padding:0;width:min(520px,94vw);background:var(--card);color:var(--ink);max-height:92vh}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.sheet{padding:18px;display:grid;gap:10px}
+.sheet h2{margin:0 0 4px;font-size:18px}
+label{font-size:13px;color:var(--sub);display:grid;gap:4px}
+input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:100%}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+.btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
+.btn.dng{color:var(--red)}
+.quick{display:flex;gap:6px;flex-wrap:wrap}.quick button{font-size:13px;padding:6px 10px;border-radius:99px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+#reader{width:100%;border-radius:12px;overflow:hidden}
+.hint{font-size:12px;color:var(--sub)}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;display:none;z-index:20}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><h1>🥫 유통기한 지킴이</h1>
+    <div><button class="iconbtn" id="btnSync">⟳ 동기화</button> <button class="iconbtn" id="btnSet">⚙</button></div></div>
+  <div class="summary">
+    <div class="sum"><b id="sExp" style="color:var(--red)">0</b><span>만료/오늘</span></div>
+    <div class="sum"><b id="sSoon" style="color:var(--org)">0</b><span>3일 이내</span></div>
+    <div class="sum"><b id="sAll">0</b><span>보관 중</span></div>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+<main id="list"></main>
+<button class="fab" id="btnAdd">＋ 제품 추가</button>
+<div class="toast" id="toast"></div>
+
+<!-- 스캔 -->
+<dialog id="dScan"><div class="sheet">
+  <h2>바코드 스캔</h2>
+  <div id="reader"></div>
+  <p class="hint">제품 뒷면 바코드를 화면 중앙에 맞춰주세요. (HTTPS 필요)</p>
+  <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
+  <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
+</div></dialog>
+
+<!-- 등록/수정 -->
+<dialog id="dForm"><form class="sheet" id="form" method="dialog">
+  <h2 id="fTitle">제품 등록</h2>
+  <label>제품명<input id="fName" required></label>
+  <div class="row">
+    <label>브랜드<input id="fBrand"></label>
+    <label>카테고리<select id="fCat"></select></label>
+  </div>
+  <div class="row">
+    <label>기한 종류<select id="fType"><option>소비기한</option><option>유통기한</option></select></label>
+    <label>기한 날짜<input type="date" id="fExp" required></label>
+  </div>
+  <div class="quick" id="quick"></div>
+  <div class="row">
+    <label>수량<input type="number" id="fQty" min="1" value="1"></label>
+    <label>바코드<input id="fCode" inputmode="numeric"></label>
+  </div>
+  <label>메모<input id="fMemo" placeholder="냉장/냉동, 개봉일 등"></label>
+  <div class="btns">
+    <button type="submit" class="btn pri" id="fSave">저장</button>
+    <button type="button" class="btn" id="fDone">다 먹음</button>
+    <button type="button" class="btn dng" id="fDiscard">폐기</button>
+    <button type="button" class="btn" id="fCancel">취소</button>
+  </div>
+</form></dialog>
+
+<!-- 설정 -->
+<dialog id="dSet"><div class="sheet">
+  <h2>설정 / 기기 간 동기화</h2>
+  <p class="hint">Supabase를 설정하면 폰·태블릿이 같은 데이터를 공유합니다. 모든 기기에 <b>같은 값</b>을 입력하세요. 비워두면 이 기기에만 저장됩니다.</p>
+  <label>Supabase URL<input id="sbUrl" placeholder="https://xxxx.supabase.co"></label>
+  <label>Supabase anon key<input id="sbKey"></label>
+  <label>공유 코드 (길고 추측 어렵게)<input id="sbHh" placeholder="예: kim-family-7f3a9c2e"></label>
+  <label>식약처 API 키 (선택, 추후 프록시용)<input id="mfdsKey" disabled placeholder="브라우저 직접 호출 불가 — 2차 단계"></label>
+  <label>알림 기준 (일 전)<input id="notiDays" value="3" type="number" min="0"></label>
+  <div class="btns"><button class="btn" id="notiPerm">알림 권한 허용</button><button class="btn pri" id="setSave">저장</button><button class="btn" id="setClose">닫기</button></div>
+  <p class="hint">알림은 현재 앱을 열었을 때 만료 임박 항목을 알려주는 방식입니다. 앱이 꺼져 있을 때의 푸시는 서버 단계에서 추가합니다.</p>
+</div></dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const CATS = ['유제품','육류','수산물','채소/과일','음료','과자/간식','냉동식품','가공식품','소스/양념','기타'];
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+};
+let items = store.get('items', []);
+let cfg = store.get('cfg', {sbUrl:'', sbKey:'', hh:'', notiDays:3});
+let filter = '전체', editing = null, scanner = null, sb = null;
+
+const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+const dday = s => Math.round((new Date(s+'T00:00:00') - today())/864e5);
+const fmt = d => { const z = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; };
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random().toString(16).slice(2));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(t){ const e=$('toast'); e.textContent=t; e.style.display='block'; clearTimeout(toast.t); toast.t=setTimeout(()=>e.style.display='none',2200); }
+
+function save(){ store.set('items', items); render(); }
+function color(d){ return d < 0 ? 'var(--red)' : d <= 1 ? 'var(--red)' : d <= 3 ? 'var(--org)' : d <= 7 ? '#c9a21a' : 'var(--grn)'; }
+function label(d){ return d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`; }
+
+function render(){
+  const active = items.filter(i => !i.deleted && i.status === 'active');
+  $('sExp').textContent = active.filter(i => dday(i.expiry) <= 0).length;
+  $('sSoon').textContent = active.filter(i => { const d = dday(i.expiry); return d > 0 && d <= 3; }).length;
+  $('sAll').textContent = active.length;
+  const cats = ['전체', ...CATS.filter(c => active.some(i => i.category === c))];
+  if (!cats.includes(filter)) filter = '전체';
+  $('chips').innerHTML = cats.map(c => `<button class="chip ${c===filter?'on':''}" data-c="${esc(c)}">${esc(c)}</button>`).join('');
+  const rows = active.filter(i => filter === '전체' || i.category === filter).sort((a,b) => a.expiry.localeCompare(b.expiry));
+  $('list').innerHTML = rows.length ? rows.map(i => { const d = dday(i.expiry);
+    return `<div class="card" data-id="${esc(i.id)}"><div class="dd" style="background:${color(d)}">${label(d)}<small>${esc(i.expiry.slice(5))}</small></div>
+    <div class="info"><div class="n">${esc(i.name)}</div><div class="m">${esc(i.category||'')}${i.brand?' · '+esc(i.brand):''} · ${esc(i.exp_type||'')}${i.memo?' · '+esc(i.memo):''}</div></div>
+    <div class="qty">×${esc(i.qty)}</div></div>`; }).join('')
+    : `<div class="empty">등록된 제품이 없습니다.<br>＋ 버튼으로 바코드를 스캔해 보세요.</div>`;
+}
+$('chips').onclick = e => { const c = e.target.dataset.c; if (c){ filter = c; render(); } };
+$('list').onclick = e => { const el = e.target.closest('.card'); if (el) openForm(items.find(i => i.id === el.dataset.id)); };
+
+/* ---------- 카테고리 추정 ---------- */
+function guessCategory(tags, name){
+  const t = (tags||[]).join(' ').toLowerCase() + ' ' + (name||'');
+  const map = [
+    ['유제품', /dairy|milk|cheese|yogh?urt|우유|치즈|요거트|요구르트|버터/],
+    ['육류', /meat|beef|pork|chicken|sausage|ham|육|고기|소시지|햄|닭/],
+    ['수산물', /fish|seafood|tuna|수산|생선|참치|어묵|오징어|새우/],
+    ['채소/과일', /vegetable|fruit|채소|과일|야채/],
+    ['냉동식품', /frozen|냉동|만두/],
+    ['음료', /beverage|drink|juice|water|soda|coffee|tea|음료|주스|커피|차$|탄산/],
+    ['과자/간식', /snack|biscuit|cookie|chocolate|candy|cereal|과자|스낵|초콜릿|젤리|빵|쿠키/],
+    ['소스/양념', /sauce|condiment|spice|oil|소스|양념|장$|간장|고추장|케첩|오일|식초/],
+    ['가공식품', /noodle|ramen|canned|instant|soup|라면|면|통조림|즉석|국|죽|카레|밥/]
+  ];
+  for (const [c, re] of map) if (re.test(t)) return c;
+  return '기타';
+}
+
+/* ---------- 제품 조회 (Open Food Facts) ---------- */
+async function lookup(code){
+  // 같은 바코드로 이전에 등록한 제품이 있으면 재사용
+  const prev = items.find(i => i.barcode === code && !i.deleted);
+  if (prev) return {name:prev.name, brand:prev.brand, category:prev.category, src:'내 기록'};
+  try{
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_ko,brands,categories_tags`);
+    const j = await r.json();
+    if (j.status === 1 && j.product){
+      const p = j.product, name = p.product_name_ko || p.product_name || '';
+      return {name, brand:(p.brands||'').split(',')[0].trim(), category:guessCategory(p.categories_tags, name), src:'Open Food Facts'};
+    }
+  }catch{}
+  return null;
+}
+
+/* ---------- 스캔 ---------- */
+async function startScan(){
+  $('dScan').showModal(); $('manualCode').value = '';
+  try{
+    scanner = new Html5Qrcode('reader', {formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128]});
+    await scanner.start({facingMode:'environment'}, {fps:10, qrbox:{width:250,height:140}}, code => handleCode(code), () => {});
+  }catch(err){ toast('카메라를 열 수 없습니다. 직접 입력해 주세요.'); }
+}
+async function stopScan(){
+  try{ if (scanner){ await scanner.stop(); scanner.clear(); } }catch{}
+  scanner = null; $('dScan').close();
+}
+async function handleCode(code){
+  await stopScan(); toast('제품 조회 중…');
+  const info = await lookup(code);
+  openForm(null, {barcode:code, ...(info||{})});
+  toast(info ? `자동 입력됨 (${info.src}) — 확인/수정하세요` : '제품 정보를 찾지 못했습니다. 직접 입력해 주세요.');
+}
+$('btnAdd').onclick = startScan;
+$('scanClose').onclick = stopScan;
+$('scanSkip').onclick = async () => { await stopScan(); openForm(null, {}); };
+$('scanManual').onclick = () => { const c = $('manualCode').value.trim(); if (c) handleCode(c); };
+
+/* ---------- 폼 ---------- */
+$('fCat').innerHTML = CATS.map(c => `<option>${c}</option>`).join('');
+$('quick').innerHTML = [['+3일',3],['+7일',7],['+14일',14],['+1개월',30],['+3개월',90],['+6개월',180],['+1년',365]]
+  .map(([t,n]) => `<button type="button" data-n="${n}">${t}</button>`).join('');
+$('quick').onclick = e => { const n = e.target.dataset.n; if (!n) return; const d = today(); d.setDate(d.getDate()+Number(n)); $('fExp').value = fmt(d); };
+
+function openForm(item, pre = {}){
+  editing = item;
+  const v = item || {name:'', brand:'', category:'기타', exp_type:'소비기한', expiry:'', qty:1, barcode:'', memo:'', ...pre};
+  $('fTitle').textContent = item ? '제품 수정' : '제품 등록';
+  $('fName').value = v.name||''; $('fBrand').value = v.brand||''; $('fCat').value = CATS.includes(v.category) ? v.category : '기타';
+  $('fType').value = v.exp_type||'소비기한'; $('fExp').value = v.expiry||''; $('fQty').value = v.qty||1;
+  $('fCode').value = v.barcode||''; $('fMemo').value = v.memo||'';
+  $('fDone').style.display = $('fDiscard').style.display = item ? '' : 'none';
+  $('dForm').showModal();
+}
+$('fCancel').onclick = () => $('dForm').close();
+$('form').onsubmit = e => {
+  e.preventDefault();
+  const rec = {
+    id: editing?.id || uid(), name:$('fName').value.trim(), brand:$('fBrand').value.trim(), category:$('fCat').value,
+    exp_type:$('fType').value, expiry:$('fExp').value, qty:Number($('fQty').value)||1, barcode:$('fCode').value.trim(),
+    memo:$('fMemo').value.trim(), status: editing?.status || 'active', deleted:false, updated_at:Date.now()
+  };
+  if (!rec.name || !rec.expiry) return;
+  items = editing ? items.map(i => i.id === rec.id ? rec : i) : [...items, rec];
+  $('dForm').close(); save(); toast('저장됨'); syncSoon();
+};
+function setStatus(s){ if (!editing) return; items = items.map(i => i.id === editing.id ? {...i, status:s, updated_at:Date.now()} : i); $('dForm').close(); save(); syncSoon(); }
+$('fDone').onclick = () => setStatus('done');
+$('fDiscard').onclick = () => setStatus('discarded');
+
+/* ---------- 동기화 (Supabase) ---------- */
+function initSb(){
+  sb = null;
+  if (cfg.sbUrl && cfg.sbKey && cfg.hh && window.supabase) { try{ sb = supabase.createClient(cfg.sbUrl, cfg.sbKey); }catch{} }
+  $('btnSync').style.opacity = sb ? 1 : .4;
+}
+let syncTimer; const syncSoon = () => { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 600); };
+async function sync(manual){
+  if (!sb){ if (manual) toast('설정에서 Supabase를 입력하면 기기 간 동기화됩니다.'); return; }
+  try{
+    const {data, error} = await sb.from('items').select('*').eq('household', cfg.hh);
+    if (error) throw error;
+    const local = new Map(items.map(i => [i.id, i])), remote = new Map(data.map(r => [r.id, r]));
+    const push = [];
+    for (const [id, l] of local){ const r = remote.get(id); if (!r || l.updated_at > r.updated_at) push.push({...l, household:cfg.hh}); }
+    for (const [id, r] of remote){ const l = local.get(id); if (!l || r.updated_at > l.updated_at){ const {household, ...rest} = r; local.set(id, rest); } }
+    if (push.length){ const {error:e2} = await sb.from('items').upsert(push); if (e2) throw e2; }
+    items = [...local.values()]; store.set('items', items); render();
+    if (manual) toast('동기화 완료');
+  }catch(err){ console.error(err); toast('동기화 실패: 설정/네트워크를 확인하세요'); }
+}
+$('btnSync').onclick = () => sync(true);
+
+/* ---------- 설정/알림 ---------- */
+$('btnSet').onclick = () => { $('sbUrl').value = cfg.sbUrl; $('sbKey').value = cfg.sbKey; $('sbHh').value = cfg.hh; $('notiDays').value = cfg.notiDays; $('dSet').showModal(); };
+$('setClose').onclick = () => $('dSet').close();
+$('setSave').onclick = () => {
+  cfg = {sbUrl:$('sbUrl').value.trim(), sbKey:$('sbKey').value.trim(), hh:$('sbHh').value.trim(), notiDays:Number($('notiDays').value)||0};
+  store.set('cfg', cfg); $('dSet').close(); initSb(); sync(true);
+};
+$('notiPerm').onclick = async () => {
+  if (!('Notification' in window)) return toast('이 브라우저는 알림을 지원하지 않습니다. (아이폰은 홈 화면에 추가 후 사용)');
+  const p = await Notification.requestPermission(); toast(p === 'granted' ? '알림 허용됨' : '알림이 거부되었습니다');
+};
+function checkAlerts(){
+  const soon = items.filter(i => !i.deleted && i.status === 'active' && dday(i.expiry) <= cfg.notiDays).sort((a,b)=>a.expiry.localeCompare(b.expiry));
+  if (!soon.length) return;
+  const key = 'alerted-' + fmt(today()); if (store.get(key, false)) return;
+  const body = soon.slice(0,5).map(i => `${i.name} (${label(dday(i.expiry))})`).join('\n');
+  if ('Notification' in window && Notification.permission === 'granted'){
+    navigator.serviceWorker?.ready.then(r => r.showNotification(`기한 임박 ${soon.length}건`, {body, icon:'icon.svg'})).catch(() => new Notification(`기한 임박 ${soon.length}건`, {body}));
+    store.set(key, true);
+  }
+}
+
+/* ---------- 시작 ---------- */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+initSb(); render(); sync().then(checkAlerts);
+document.addEventListener('visibilitychange', () => { if (!document.hidden){ render(); sync(); } });
+</script>
+</body>
+</html>
