@@ -73,7 +73,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <div class="btns"><button type="button" class="btn" id="lensBtn">🔄 렌즈 전환</button><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
   <p class="hint">실시간 초점이 안 맞으면 "사진으로 인식"을 눌러 기본 카메라로 바코드를 찍어주세요. 바코드에서 15~20cm 떨어지면 초점이 잘 맞습니다.</p>
   <div id="fileReader" hidden></div>
-  <p class="hint" id="camInfo">v4</p>
+  <p class="hint" id="camInfo">v5</p>
   <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
   <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
 </div></dialog>
@@ -191,7 +191,8 @@ async function lookup(code){
     }catch{}
   }
   try{
-    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_ko,brands,categories_tags`);
+    const ctl2 = new AbortController(); setTimeout(() => ctl2.abort(), 6000);
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_ko,brands,categories_tags`, {signal:ctl2.signal});
     const j = await r.json();
     if (j.status === 1 && j.product){
       const p = j.product, name = p.product_name_ko || p.product_name || '';
@@ -215,7 +216,7 @@ async function startScan(deviceId){
       code => handleCode(code), () => {});
     try{ await scanner.applyVideoConstraints({focusMode:'continuous', advanced:[{focusMode:'continuous'}]}); }catch{}
     try{ if (!cams.length) cams = await Html5Qrcode.getCameras(); }catch{}
-    $('camInfo').textContent = `v4 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
+    $('camInfo').textContent = `v5 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
   }catch(err){ toast('카메라를 열 수 없습니다. 직접 입력해 주세요.'); }
 }
 async function stopScan(){
@@ -236,14 +237,27 @@ $('lensBtn').onclick = () => {
   camIdx = (camIdx + 1) % list.length; toast(`렌즈 ${camIdx+1}/${list.length}: ${list[camIdx].label||''}`);
   startScan(list[camIdx].id);
 };
+async function shrink(file, max=1600){
+  const bmp = await createImageBitmap(file); const k = Math.min(1, max/Math.max(bmp.width,bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width*k); c.height = Math.round(bmp.height*k);
+  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+  return new Promise(r => c.toBlob(b => r(new File([b],'scan.jpg',{type:'image/jpeg'})),'image/jpeg',.92));
+}
 $('scanFile').onchange = async e => {
   const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  toast('사진 인식 중…');
   try{ if (scanner){ await scanner.stop(); scanner.clear(); scanner = null; } }catch{}
+  let code = null;
   try{
-    const fr = new Html5Qrcode('fileReader');
-    const code = await fr.scanFile(f, false); fr.clear();
-    handleCode(code);
-  }catch{ toast('바코드를 읽지 못했습니다. 더 가까이/선명하게 다시 찍어주세요.'); startScan(); }
+    const fr = new Html5Qrcode('fileReader', {formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128]});
+    for (const src of [await shrink(f,1600), await shrink(f,1000), f]){
+      try{ code = await fr.scanFile(src, false); break; }catch{}
+    }
+    fr.clear();
+  }catch(err){ console.error(err); }
+  if (code) return handleCode(code);
+  toast('바코드를 읽지 못했습니다. 바코드만 크게 찍거나 아래에 숫자를 직접 입력하세요.');
+  $('manualCode').focus();
 };
 $('scanSkip').onclick = async () => { await stopScan(); openForm(null, {}); };
 $('scanManual').onclick = () => { const c = $('manualCode').value.trim(); if (c) handleCode(c); };
