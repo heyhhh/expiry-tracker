@@ -72,7 +72,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <p class="hint">제품 뒷면 바코드를 화면 중앙에 맞춰주세요. (HTTPS 필요)</p>
   <div class="btns"><button type="button" class="btn" id="lensBtn">🔄 렌즈 전환</button><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
   <p class="hint">실시간 초점이 안 맞으면 "사진으로 인식"을 눌러 기본 카메라로 바코드를 찍어주세요. 바코드에서 15~20cm 떨어지면 초점이 잘 맞습니다.</p>
-  <p class="hint" id="camInfo">v10</p>
+  <p class="hint" id="camInfo">v11</p>
   <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
   <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
 </div></dialog>
@@ -94,6 +94,11 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
     <label>수량<input type="number" id="fQty" min="1" value="1"></label>
     <label>바코드<input id="fCode" inputmode="numeric"></label>
   </div>
+  <div class="btns">
+    <a class="btn" id="fSearch" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">🔍 코리안넷에서 검색</a>
+    <button type="button" class="btn" id="fPaste">📋 붙여넣기 → 제품명</button>
+  </div>
+  <p class="hint">검색 결과에서 제품명을 복사해 온 뒤 "붙여넣기"를 누르고 저장하면, 같은 바코드는 다음부터 자동으로 채워집니다.</p>
   <label>메모<input id="fMemo" placeholder="냉장/냉동, 개봉일 등"></label>
   <div class="btns">
     <button type="submit" class="btn pri" id="fSave">저장</button>
@@ -288,12 +293,12 @@ async function startScan(deviceId){
   for (const v of [{...base, width:{ideal:1920}, height:{ideal:1080}}, base]){
     try{ stream = await navigator.mediaDevices.getUserMedia({video:v, audio:false}); break; }catch(e){ lastErr = String(e && e.name || e); }
   }
-  if (!stream){ toast('카메라를 열 수 없습니다 (' + lastErr + '). 사진으로 인식을 이용하세요.'); $('camInfo').textContent = 'v10 · 카메라 오류: ' + lastErr; return; }
+  if (!stream){ toast('카메라를 열 수 없습니다 (' + lastErr + '). 사진으로 인식을 이용하세요.'); $('camInfo').textContent = 'v11 · 카메라 오류: ' + lastErr; return; }
   const track = stream.getVideoTracks()[0];
   try{ await track.applyConstraints({advanced:[{focusMode:'continuous'}]}); }catch{}
   $('cam').srcObject = stream; try{ await $('cam').play(); }catch{}
   try{ cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); }catch{}
-  $('camInfo').textContent = `v10 · 카메라 ${cams.length}개: ` + cams.map(c => c.label || '이름없음').join(' / ');
+  $('camInfo').textContent = `v11 · 카메라 ${cams.length}개: ` + cams.map(c => c.label || '이름없음').join(' / ');
   scanning = true;
   wasmDetector().catch(() => {});   // 미리 로드
   const mine = stream, tick = async () => {
@@ -356,6 +361,7 @@ function openForm(item, pre = {}){
   $('fType').value = v.exp_type||'소비기한'; $('fExp').value = v.expiry||''; $('fQty').value = v.qty||1;
   $('fCode').value = v.barcode||''; $('fMemo').value = v.memo||'';
   $('fDone').style.display = $('fDiscard').style.display = item ? '' : 'none';
+  updSearch();
   $('dForm').showModal();
 }
 $('fCancel').onclick = () => $('dForm').close();
@@ -373,6 +379,42 @@ $('form').onsubmit = e => {
 function setStatus(s){ if (!editing) return; items = items.map(i => i.id === editing.id ? {...i, status:s, updated_at:Date.now()} : i); $('dForm').close(); save(); syncSoon(); }
 $('fDone').onclick = () => setStatus('done');
 $('fDiscard').onclick = () => setStatus('discarded');
+
+
+/* ---------- 코리안넷 검색 링크 / 붙여넣기 / 작성 중 임시저장 ---------- */
+function updSearch(){
+  const c = $('fCode').value.replace(/\D/g, ''), a = $('fSearch');
+  a.href = c ? 'https://www.koreannet.or.kr/front/koreannet/gtinSrch.do?gtin=' + c : '#';
+  a.style.opacity = c ? 1 : .4;
+  a.onclick = e => { if (!c){ e.preventDefault(); toast('바코드를 먼저 입력하세요'); } };
+}
+$('fCode').addEventListener('input', updSearch);
+$('fPaste').onclick = async () => {
+  try{
+    const t = (await navigator.clipboard.readText()).trim();
+    if (!t) return toast('클립보드가 비어 있습니다');
+    $('fName').value = t.split(/\r?\n/)[0].slice(0, 80); saveDraft(); toast('제품명에 붙여넣었습니다');
+  }catch{ toast('붙여넣기 권한이 없습니다. 제품명 칸을 길게 눌러 직접 붙여넣어 주세요.'); }
+};
+// 다른 탭(코리안넷)에 다녀오는 동안 폰이 페이지를 다시 불러와도 작성 중인 내용이 유지되도록
+function saveDraft(){
+  if (!$('dForm').open) return;
+  store.set('draft', {id: editing ? editing.id : null, v:{name:$('fName').value, brand:$('fBrand').value, category:$('fCat').value,
+    exp_type:$('fType').value, expiry:$('fExp').value, qty:$('fQty').value, barcode:$('fCode').value, memo:$('fMemo').value}});
+}
+$('form').addEventListener('input', saveDraft);
+$('form').addEventListener('change', saveDraft);
+$('dForm').addEventListener('close', () => store.set('draft', null));
+function restoreDraft(){
+  const d = store.get('draft', null); if (!d || !d.v) return;
+  const base = d.id ? items.find(i => i.id === d.id) : null;
+  if (d.id && !base){ store.set('draft', null); return; }
+  openForm(base || null, {});
+  const v = d.v;
+  $('fName').value = v.name; $('fBrand').value = v.brand; $('fCat').value = v.category; $('fType').value = v.exp_type;
+  $('fExp').value = v.expiry; $('fQty').value = v.qty; $('fCode').value = v.barcode; $('fMemo').value = v.memo; updSearch();
+  toast('작성 중이던 내용을 복원했습니다');
+}
 
 /* ---------- 동기화 (Supabase) ---------- */
 function initSb(){
@@ -426,7 +468,7 @@ function checkAlerts(){
 
 /* ---------- 시작 ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-initSb(); render(); sync().then(checkAlerts);
+initSb(); render(); restoreDraft(); sync().then(checkAlerts);
 document.addEventListener('visibilitychange', () => { if (!document.hidden){ render(); sync(); } });
 </script>
 </body>
