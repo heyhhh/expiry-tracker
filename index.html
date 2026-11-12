@@ -73,7 +73,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <div class="btns"><button type="button" class="btn" id="lensBtn">🔄 렌즈 전환</button><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
   <p class="hint">실시간 초점이 안 맞으면 "사진으로 인식"을 눌러 기본 카메라로 바코드를 찍어주세요. 바코드에서 15~20cm 떨어지면 초점이 잘 맞습니다.</p>
   <div id="fileReader" hidden></div>
-  <p class="hint" id="camInfo">v8</p>
+  <p class="hint" id="camInfo">v9</p>
   <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
   <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
 </div></dialog>
@@ -214,14 +214,14 @@ function toKorean(text){
 function guessCategory(tags, name){
   const t = (tags||[]).join(' ').toLowerCase() + ' ' + (name||'');
   const map = [
-    ['유제품', /dairy|milk|cheese|yogh?urt|우유|치즈|요거트|요구르트|버터/],
-    ['육류', /meat|beef|pork|chicken|sausage|ham|육|고기|소시지|햄|닭/],
-    ['수산물', /fish|seafood|tuna|수산|생선|참치|어묵|오징어|새우/],
+    ['유제품', /dairy|milk|cheese|yogh?urt|우유|치즈|요거트|요구르트|버터|발효유|가공유|유가공|크림/],
+    ['육류', /meat|beef|pork|chicken|sausage|ham|육|고기|소시지|햄|닭|식육|축산/],
+    ['수산물', /fish|seafood|tuna|수산|생선|참치|어묵|오징어|새우|어육|젓갈|김$/],
     ['채소/과일', /vegetable|fruit|채소|과일|야채/],
     ['냉동식품', /frozen|냉동|만두/],
-    ['음료', /beverage|drink|juice|water|soda|coffee|tea|음료|주스|커피|차$|탄산/],
-    ['과자/간식', /snack|biscuit|cookie|chocolate|candy|cereal|과자|스낵|초콜릿|젤리|빵|쿠키/],
-    ['소스/양념', /sauce|condiment|spice|oil|gochujang|doenjang|ganjang|소스|양념|장$|간장|고추장|된장|케첩|오일|식초/],
+    ['음료', /beverage|drink|juice|water|soda|coffee|tea|음료|주스|커피|차$|탄산|과채|생수/],
+    ['과자/간식', /snack|biscuit|cookie|chocolate|candy|cereal|과자|스낵|초콜릿|젤리|빵|쿠키|캔디|아이스크림|껌|시리얼|떡류/],
+    ['소스/양념', /sauce|condiment|spice|oil|gochujang|doenjang|ganjang|소스|양념|장$|장류|조미|간장|고추장|된장|케첩|오일|식초|드레싱/],
     ['가공식품', /noodle|ramen|ramyun|myeon|bibim|jjajang|kimchi|canned|instant|soup|라면|면|통조림|즉석|국|죽|카레|밥|김치|만두|떡/]
   ];
   for (const [c, re] of map) if (re.test(t)) return c;
@@ -230,17 +230,19 @@ function guessCategory(tags, name){
 
 /* ---------- 제품 조회 (Open Food Facts) ---------- */
 async function lookup(code){
-  // 같은 바코드로 이전에 등록한 제품이 있으면 재사용
-  const prev = items.find(i => i.barcode === code && !i.deleted);
-  if (prev) return {name:prev.name, brand:prev.brand, category:prev.category, src:'내 기록'};
-  if (cfg.sbUrl && cfg.sbKey){ // 식약처 C005 (Supabase Edge Function 프록시)
+  // 1순위: 식약처 C005 (Supabase Edge Function 프록시)
+  if (cfg.sbUrl && cfg.sbKey){
     try{
-      const ctl = new AbortController(); setTimeout(() => ctl.abort(), 6000);
+      const ctl = new AbortController(); setTimeout(() => ctl.abort(), 8000);
       const r = await fetch(`${cfg.sbUrl}/functions/v1/barcode?code=${encodeURIComponent(code)}`, {headers:{apikey:cfg.sbKey}, signal:ctl.signal});
       const j = await r.json();
       if (j.found && j.name) return {name:j.name, brand:j.brand, category:guessCategory([j.type], j.name+' '+j.type), shelf:j.shelf, src:'식약처'};
     }catch{}
   }
+  // 2순위: 이 앱에 이전에 등록한 같은 바코드
+  const prev = items.find(i => i.barcode === code && !i.deleted);
+  if (prev) return {name:prev.name, brand:prev.brand, category:prev.category, src:'내 기록'};
+  // 3순위: Open Food Facts (영문 → 한글 변환)
   try{
     const ctl2 = new AbortController(); setTimeout(() => ctl2.abort(), 6000);
     const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_ko,brands,categories_tags`, {signal:ctl2.signal});
@@ -262,7 +264,7 @@ async function startScan(deviceId){
   $('manualCode').value = '';
   try{ if (scanner){ await scanner.stop(); scanner.clear(); scanner = null; } }catch{}
   try{ if (!cams.length) cams = await Html5Qrcode.getCameras(); }catch{}   // 시작 전에 조회 (시작 후 조회하면 영상이 끊길 수 있음)
-  $('camInfo').textContent = `v8 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
+  $('camInfo').textContent = `v9 · 카메라 ${cams.length}개 감지: ` + cams.map(c => c.label || '이름없음').join(' / ');
   const fmts = {formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128]};
   const base = deviceId ? {deviceId:{exact:deviceId}} : {facingMode:'environment'};
   const attempts = [
@@ -287,7 +289,7 @@ async function stopScan(){
 async function handleCode(code){
   await stopScan(); toast('제품 조회 중…');
   const info = await lookup(code);
-  openForm(null, {barcode:code, ...(info||{})});
+  openForm(null, {barcode:code, ...(info||{}), memo: info && info.shelf ? '표시: ' + info.shelf : ''});
   toast(info ? `자동 입력됨 (${info.src}) — 확인/수정하세요` : '제품 정보를 찾지 못했습니다. 직접 입력해 주세요.');
 }
 $('btnAdd').onclick = () => startScan();

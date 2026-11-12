@@ -13,18 +13,22 @@ Deno.serve(async (req) => {
   const key = Deno.env.get('MFDS_KEY');
   if (!key) return json({ found: false, error: 'server key missing' }, 500);
   try {
-    const r = await fetch(`https://openapi.foodsafetykorea.or.kr/api/${key}/C005/json/1/1/BAR_CD=${code}`);
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8000);
+    const r = await fetch(`https://openapi.foodsafetykorea.go.kr/api/${key}/C005/json/1/1/BAR_CD=${code}`, { signal: ctl.signal });
+    clearTimeout(t);
     const j = await r.json();
     const row = j?.C005?.row?.[0];
     if (!row) return json({ found: false });
     return json({
       found: true,
       name: row.PRDLST_NM || '',
-      brand: row.BSSH_NM || '',
+      brand: (row.BSSH_NM || '').replace(/\(주\)|㈜|주식회사/g, '').trim(),
       type: row.PRDLST_DCNM || '',
       shelf: row.POG_DAYCNT || '',
     });
-  } catch (e) {
-    return json({ found: false, error: String(e) }, 502);
+  } catch (_e) {
+    // 에러 문구에 요청 URL(=키)이 섞일 수 있으므로 내용을 돌려주지 않습니다.
+    return json({ found: false, error: 'upstream error' }, 502);
   }
 });
