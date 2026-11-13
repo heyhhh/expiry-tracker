@@ -23,12 +23,13 @@ const PROMPT = `당신은 한국 제품(식품, 의약품, 건강기능식품, �
   "brand": "브랜드 또는 제조사",
   "category": "${CATS.join(' | ')} 중 하나 (약은 의약품, 영양제·비타민·홍삼 등은 건강기능식품)",
   "exp_type": "소비기한 | 유통기한 | 사용기한 | null (문구가 보일 때만. 의약품·화장품은 보통 사용기한)",
-  "expiry": "YYYY-MM-DD 형식의 기한 날짜, 보이지 않거나 불확실하면 null",
+  "expiry_text": "사진에 실제로 인쇄된 기한 문구를 보이는 그대로 옮긴 글자 (예: 'EXP 25.08.14', '소비기한 2026.01.09까지'). 기한 날짜가 사진에 인쇄되어 있지 않거나 읽을 수 없으면 반드시 null",
+  "expiry": "expiry_text를 YYYY-MM-DD로 변환한 값. expiry_text가 null이면 반드시 null (날짜를 지어내거나 짐작하지 말 것)",
   "photo": "이 제품의 포장(앞면)이 가장 잘 보이는 사진의 번호(1부터 시작하는 정수). 모르면 null",
   "confidence": "high | medium | low"
  }
 ]}
-규칙: 보이지 않는 값은 추측하지 말고 null. 날짜는 '2027.03.15까지', '27/03/15' 같은 표기를 YYYY-MM-DD로 변환. 제조일자와 기한을 혼동하지 말 것. 같은 제품을 중복 항목으로 만들지 말 것.`;
+규칙: 보이지 않는 값은 추측하지 말고 null. 기한 날짜는 포장에 인쇄된 것만 사용하고, 사진에 날짜가 없으면 expiry_text와 expiry 모두 null (제품명·용량·바코드·영양성분 숫자를 날짜로 해석하지 말 것). 날짜 표기('YY.MM.DD', 'YYYY/MM/DD', 'DD.MM.YYYY' 등)는 YYYY-MM-DD로 변환. 제조일자와 기한을 혼동하지 말 것. 같은 제품을 중복 항목으로 만들지 말 것.`;
 
 function parse(text: string) {
   const m = text.match(/\{[\s\S]*\}/);
@@ -38,7 +39,15 @@ function parse(text: string) {
 function clean(o: any, imageCount = 0) {
   if (!o || typeof o !== 'object') return null;
   const s = (v: unknown) => (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'null' ? v.trim() : null);
-  const exp = s(o.expiry);
+  // 기한 날짜 검증: 사진에서 읽은 원문(expiry_text)이 있고, 그 숫자에 변환된 날짜(연·월·일)가 들어 있을 때만 인정 (모델이 지어낸 날짜 차단)
+  let exp = s(o.expiry);
+  if (exp) {
+    const txt = (s(o.expiry_text) || '').replace(/\D/g, '');
+    const m = exp.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const okText = !!m && txt.length >= 4 && txt.includes(m[1].slice(2)) && txt.includes(m[2]) && txt.includes(m[3]);
+    const yr = m ? Number(m[1]) : 0;
+    if (!okText || yr < 2000 || yr > 2045) exp = null;
+  }
   const barcode = s(o.barcode)?.replace(/\D/g, '') || null;
   return {
     name: s(o.name),

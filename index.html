@@ -186,7 +186,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v21</p>
+  <p class="hint" id="verInfo">v22</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -661,8 +661,7 @@ $('doAnalyze').onclick = async () => {
     } else {
       const ai = list[0];
       openForm(null, {name: ai.name || '', brand: ai.brand || '', category: ai.category || '기타',
-        exp_type: parseDate(ai.expiry) ? (ai.exp_type && ai.exp_type !== NOEXP ? ai.exp_type : '소비기한') : NOEXP, expiry: parseDate(ai.expiry) || ''});
-      if (!parseDate(ai.expiry) && ai.exp_type && ai.exp_type !== NOEXP) lastRealType = ai.exp_type;
+        exp_type: ai.exp_type && ai.exp_type !== NOEXP ? ai.exp_type : '소비기한', expiry: parseDate(ai.expiry) || ''});   // 날짜를 못 읽었으면 날짜칸은 비워 둠
       autoImage();
       $('aiNote').style.display = '';
       if (parseDate(ai.expiry)){ $('fExpT').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExpT').style.outline = '', 6000); }
@@ -691,7 +690,7 @@ function fetchReviewImages(){
 }
 function openReview(list){
   reviewItems = list.map(x => ({name:x.name||'', brand:x.brand||'', category:CATS.includes(x.category)?x.category:'기타',
-    exp_type:parseDate(x.expiry) ? (EXP_TYPES.includes(x.exp_type) && x.exp_type !== NOEXP ? x.exp_type : '소비기한') : NOEXP, expiry:parseDate(x.expiry)||'', qty:1, photo:'', rid:++rvSeq}));
+    exp_type:EXP_TYPES.includes(x.exp_type) && x.exp_type !== NOEXP ? x.exp_type : '소비기한', expiry:parseDate(x.expiry)||'', qty:1, photo:'', rid:++rvSeq}));
   renderReview(); $('dReview').showModal(); fetchReviewImages();
 }
 function renderReview(){
