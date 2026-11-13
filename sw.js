@@ -1,5 +1,5 @@
 // 네트워크 우선(network-first) 서비스워커: 항상 최신 파일을 먼저 받고, 오프라인일 때만 캐시를 사용
-const CACHE = 'expiry-v33';
+const CACHE = 'expiry-v34';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 self.addEventListener('install', e => {
   self.skipWaiting();

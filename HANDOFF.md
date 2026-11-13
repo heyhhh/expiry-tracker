@@ -326,5 +326,5 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 - 웹은 `제품 사진으로 AI 분석`을 누르면 바로 카메라가 열리지만(`NATIVE` 아님), 앱(Capacitor)에서는 사진 모으기 화면을 먼저 보여주고 `사진 찍기`/`앨범에서 여러 장`을 직접 선택하게 함. `analyze_ok` 로그에 사용된 모델명 포함.
 - 모델 우선순위(`analyze` DEFAULT_MODELS, 시크릿 `AI_MODELS`가 있으면 그것이 우선): gemma-4-31b → particle-1 → gemma-4-26b → nemotron-3.5-super-vl. OpenRouter 무료 비전 모델 중 inkling-2-small, dots-3-note-preview, nemotron-3-nano-omni 등은 미시험.
 
-## 32. v33: 목록 정렬
-- 검색창 옆 정렬 선택(`#sortSel`, 선택은 localStorage `sort`에 저장): 기한 임박순(기본)/기한 먼 순/이름 가나다순/이름 역순/카테고리순/수량 많은 순/수량 적은 순/최근 수정순. 기한 없음(`확인불가`)은 기한 정렬에서 항상 맨 뒤. 동률이면 기한→이름 순. (`sortFn()`)
+## 32. v33~v34: 목록 정렬
+- 검색창 옆: 기준 선택(`#sortSel`: 기한/이름/카테고리/수량/최근수정) + 방향 버튼(`#sortDir`, ↑↓ 아이콘에서 현재 방향 쪽이 강조색, 누르면 오름/내림 전환). 기준을 바꾸면 방향은 기본값(기한·이름·카테고리=오름, 수량·최근수정=내림)으로. 상태는 localStorage `sort`={f,d}에 저장(이전 문자열 형식은 변환). 기한 없음(`확인불가`)은 기한 정렬에서 항상 맨 뒤. 동률이면 기한→이름 순. (`sortFn()`)
