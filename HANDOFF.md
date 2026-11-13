@@ -302,3 +302,7 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 - `supabase/backup.sql`(사용자가 SQL Editor에서 직접 실행 필요 — 앱 쪽 migration은 권한 단계에서 거절됨): `backups(id, household, kind[auto|manual|pre-restore], item_count, data jsonb, created_at)` + RLS(내 리스트만) + 선택적 pg_cron(매일 04:00 KST 서버 자동 백업, 자동 백업은 리스트당 최근 30개).
 - 앱: `☁ 지금 백업`(수동), `↩ 백업에서 복원`(목록에서 선택 → 확인 → 복원 직전 상태를 `pre-restore`로 먼저 저장 → 백업 내용을 새 updated_at으로 되살리고 백업에 없는 항목은 soft delete → 동기화). 로그인/동기화 직후 `autoBackup()`: 마지막 자동 백업이 20시간 넘었으면 1회 생성. 백업은 리스트당 최근 150개만 유지.
 - 검증: 메모리 가짜 서버로 백업·복원·자동 1일 1회·30개 제한·테이블 없음 오류 처리 확인. 실제 서버는 테이블 생성 후 확인 필요.
+
+## 27. v27: 설정 화면 정리
+- 설정 대화상자: 상단 ✕ 닫기, 대화상자 자체 스크롤(`overflow-y:auto`, 높이 92dvh)로 위가 잘리지 않음. 순서: 계정/그룹/초대 코드/알림 → 그룹 나가기·로그아웃·닫기 → (구분선) 엑셀 내보내기·가져오기, 백업·복원(맨 아래).
+- 화면 문구 "리스트" → "그룹" (코드/DB 이름은 household 그대로).

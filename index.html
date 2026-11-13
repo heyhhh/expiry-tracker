@@ -77,7 +77,7 @@ h1{font-size:19px;margin:0;font-weight:750;letter-spacing:-.03em;white-space:now
 .fab{position:fixed;right:max(18px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));z-index:6;background:var(--brand);color:#fff;border:0;border-radius:99px;padding:16px 24px;font-size:16px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.28);cursor:pointer}
 
 /* 다이얼로그: 폰 = 하단 시트, 태블릿 = 중앙 카드 */
-dialog{border:0;border-radius:22px;padding:0;width:min(560px,94vw);background:var(--surface);color:var(--ink);max-height:92vh;box-shadow:0 24px 70px rgba(0,0,0,.4)}
+dialog{border:0;border-radius:22px;padding:0;width:min(560px,94vw);background:var(--surface);color:var(--ink);max-height:92vh;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain;box-shadow:0 24px 70px rgba(0,0,0,.4)}
 dialog[open]{animation:pop .18s ease-out}
 dialog::backdrop{background:rgba(10,14,22,.5);backdrop-filter:blur(2px)}
 @keyframes pop{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
@@ -98,6 +98,9 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
 .acct{display:flex;justify-content:space-between;gap:10px;align-items:baseline;word-break:break-all}
 .codebox{display:flex;gap:8px;align-items:center}.codebox input{font-weight:700;letter-spacing:.08em}
 .seg{display:flex;gap:8px;flex-wrap:wrap}.seg .chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.sethead{display:flex;justify-content:space-between;align-items:center}.sethead h2{margin:0}
+.xbtn{border:0;background:var(--surface2);width:38px;height:38px;border-radius:50%;font-size:17px;cursor:pointer}
+.sep{border:0;border-top:1px solid var(--line);margin:2px 0;width:100%}
 .bklist{display:grid;gap:8px;max-height:50vh;overflow:auto}
 .bkrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--surface2)}
 .bkrow small{display:block;color:var(--sub)}
@@ -192,7 +195,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v26</p>
+  <p class="hint" id="verInfo">v27</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -272,21 +275,22 @@ input.bad{outline:2px solid var(--red)}
 
 <!-- 설정 -->
 <dialog id="dSet"><div class="sheet">
-  <h2>설정</h2>
+  <div class="sethead"><h2>설정</h2><button type="button" class="xbtn" id="setX" aria-label="닫기">✕</button></div>
   <div class="acct"><span class="hint">로그인 계정</span><b id="acEmail">-</b></div>
-  <div class="acct" id="acHhRow"><span class="hint">내 리스트</span><b id="acHh">-</b></div>
+  <div class="acct" id="acHhRow"><span class="hint">내 그룹</span><b id="acHh">-</b></div>
   <div id="acCodeRow">
     <label>초대 코드<div class="codebox"><input id="acCode" readonly><button type="button" class="btn sm" id="copyCode">복사</button></div></label>
-    <p class="hint">같은 리스트를 함께 쓸 가족에게 이 코드를 알려 주세요. 가족이 가입한 뒤 "초대 코드로 참여"에 입력하면 같은 제품 목록을 보게 됩니다. 코드를 모르는 사람은 목록을 볼 수 없어요.</p>
+    <p class="hint">함께 쓸 가족에게 알려 주세요. 가족이 가입한 뒤 "초대 코드로 참여"에 입력하면 같은 목록을 봅니다.</p>
   </div>
-  <div class="btns"><button class="btn" id="btnExport">📥 엑셀로 내보내기</button><button class="btn" id="btnImport">📤 엑셀에서 가져오기</button><input type="file" id="impFile" accept=".xlsx,.xls,.csv" hidden></div>
-  <p class="hint">현재 리스트의 제품을 엑셀(.xlsx) 파일로 저장합니다. 보관 중 제품과 처리된(다 먹음·폐기) 제품이 시트로 나뉩니다. 가져오기는 이 내보내기 양식(제품명·브랜드·카테고리·기한 종류·기한 날짜·수량·메모)의 파일을 읽으며, 이미 같은 제품이 있으면 건너뜁니다.</p>
-  <div class="btns"><button class="btn" id="btnBackup">☁ 지금 백업</button><button class="btn" id="btnRestore">↩ 백업에서 복원</button></div>
-  <p class="hint" id="bkInfo">서버에 목록 사본을 저장합니다. 하루에 한 번 자동으로도 백업되고, 최근 30개를 보관해요.</p>
   <label>알림 기준 (일 전)<input id="notiDays" value="3" type="number" min="0" inputmode="numeric"></label>
   <div class="btns"><button class="btn" id="notiPerm">알림 권한 허용</button><button class="btn pri" id="setSave">저장</button></div>
-  <div class="btns"><button class="btn" id="btnLeave">리스트 나가기</button><button class="btn" id="btnLogout">로그아웃</button><button class="btn" id="setClose">닫기</button></div>
-  <p class="hint">알림은 현재 앱을 열었을 때 만료 임박 항목을 알려주는 방식입니다. 앱이 꺼져 있을 때의 푸시는 서버 단계에서 추가합니다.</p>
+  <p class="hint">알림은 앱을 열었을 때 만료 임박 제품을 알려줍니다.</p>
+  <div class="btns"><button class="btn" id="btnLeave">그룹 나가기</button><button class="btn" id="btnLogout">로그아웃</button><button class="btn" id="setClose">닫기</button></div>
+  <hr class="sep">
+  <div class="btns"><button class="btn" id="btnExport">📥 엑셀로 내보내기</button><button class="btn" id="btnImport">📤 엑셀에서 가져오기</button><input type="file" id="impFile" accept=".xlsx,.xls,.csv" hidden></div>
+  <p class="hint">엑셀(.xlsx)로 저장하거나, 그 양식의 파일을 가져옵니다. 이미 있는 제품은 건너뜁니다.</p>
+  <div class="btns"><button class="btn" id="btnBackup">☁ 지금 백업</button><button class="btn" id="btnRestore">↩ 백업에서 복원</button></div>
+  <p class="hint" id="bkInfo">서버에 목록 사본을 저장합니다. 하루에 한 번 자동으로도 백업되고, 최근 150개를 보관해요.</p>
 </div></dialog>
 
 <!-- 백업에서 복원 -->
@@ -310,14 +314,14 @@ input.bad{outline:2px solid var(--red)}
   <p class="hint">로그인하면 가족과 같은 제품 목록을 폰·태블릿에서 함께 볼 수 있어요.</p>
 </div></dialog>
 
-<!-- 리스트 만들기 / 초대 코드로 참여 -->
+<!-- 그룹 만들기 / 초대 코드로 참여 -->
 <dialog id="dHouse"><div class="sheet">
-  <h2>어느 리스트를 쓸까요?</h2>
-  <p class="hint">가족이 이미 쓰고 있다면 받은 <b>초대 코드</b>로 참여하세요. 처음이라면 새 리스트를 만들면 됩니다.</p>
+  <h2>어느 그룹를 쓸까요?</h2>
+  <p class="hint">가족이 이미 쓰고 있다면 받은 <b>초대 코드</b>로 참여하세요. 처음이라면 새 그룹를 만들면 됩니다.</p>
   <label>초대 코드로 참여<input id="hhCode" placeholder="예: 93302AEE9572" autocapitalize="characters" autocomplete="off"></label>
   <div class="btns"><button class="btn pri" id="hhJoin">초대 코드로 참여</button></div>
-  <label>새 리스트 이름<input id="hhName" placeholder="예: 우리 집" maxlength="30"></label>
-  <div class="btns"><button class="btn" id="hhCreate">새 리스트 만들기</button></div>
+  <label>새 그룹 이름<input id="hhName" placeholder="예: 우리 집" maxlength="30"></label>
+  <div class="btns"><button class="btn" id="hhCreate">새 그룹 만들기</button></div>
   <p class="hint" id="hhMsg" role="status"></p>
   <div class="btns"><button class="btn" id="hhOut">로그아웃</button></div>
 </div></dialog>
@@ -795,7 +799,7 @@ $('rvSave').onclick = () => {
 };
 
 /* ---------- 동기화 (Supabase) ---------- */
-let hh = store.get('hh', null);        // {id, name, invite_code} — 내가 속한 리스트
+let hh = store.get('hh', null);        // {id, name, invite_code} — 내가 속한 그룹
 let session = null;
 function initSb(){
   sb = null;
@@ -809,7 +813,7 @@ async function authHeaders(){
 }
 let syncTimer; const syncSoon = () => { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 600); };
 async function sync(manual){
-  if (!sb || !hh){ if (manual) toast(session ? '리스트를 먼저 선택해 주세요.' : '로그인하면 기기 간 동기화됩니다.'); return; }
+  if (!sb || !hh){ if (manual) toast(session ? '그룹를 먼저 선택해 주세요.' : '로그인하면 기기 간 동기화됩니다.'); return; }
   try{
     const {data, error} = await sb.from('items').select('*').eq('household', hh.id);
     if (error) throw error;
@@ -824,7 +828,7 @@ async function sync(manual){
 }
 $('btnSync').onclick = () => { if (sb && !session) showAuth(); else sync(true); };
 
-/* ---------- 로그인 / 리스트 ---------- */
+/* ---------- 로그인 / 그룹 ---------- */
 const noClose = id => $(id).addEventListener('cancel', e => e.preventDefault());   // Esc로 닫기 방지
 ['dAuth','dHouse'].forEach(noClose);
 function resetLocal(){ items = []; store.set('items', []); clearFormDraft(); render(); }
@@ -866,7 +870,7 @@ $('auForm').onsubmit = async e => {
   }catch(err){ auSay(authErr(err), true); }
   finally{ $('auGo').disabled = false; }
 };
-// 로그인 직후/앱 시작 시: 다른 계정의 로컬 데이터 정리 → 내 리스트 확인 → 동기화
+// 로그인 직후/앱 시작 시: 다른 계정의 로컬 데이터 정리 → 내 그룹 확인 → 동기화
 async function afterLogin(){
   const uid = session.user.id;
   if (store.get('owner', null) !== uid){ hh = null; store.set('hh', null); store.set('owner', uid); resetLocal(); }
@@ -880,7 +884,7 @@ async function afterLogin(){
 const hhErr = e => {
   const m = String((e && e.message) || e || '');
   if (/invalid code/i.test(m)) return '초대 코드가 올바르지 않습니다. 다시 확인해 주세요.';
-  if (/already in/i.test(m)) return '이미 리스트에 속해 있습니다.';
+  if (/already in/i.test(m)) return '이미 그룹에 속해 있습니다.';
   if (/not logged/i.test(m)) return '로그인이 필요합니다.';
   return '처리하지 못했습니다: ' + m.slice(0, 100);
 };
@@ -889,7 +893,7 @@ async function hhAct(fn, args){
   const {data, error} = await sb.rpc(fn, args);
   if (error){ msg.style.color = 'var(--red)'; msg.textContent = hhErr(error); return; }
   hh = data[0]; store.set('hh', hh); initSb(); $('hhCode').value = ''; $('dHouse').close(); await sync(true);
-  toast(fn === 'create_household' ? `'${hh.name}' 리스트를 만들었어요` : `'${hh.name}' 리스트에 참여했어요`, 3500);
+  toast(fn === 'create_household' ? `'${hh.name}' 그룹를 만들었어요` : `'${hh.name}' 그룹에 참여했어요`, 3500);
 }
 $('hhJoin').onclick = () => { const c = $('hhCode').value.trim(); if (!c){ $('hhMsg').style.color = 'var(--red)'; $('hhMsg').textContent = '초대 코드를 입력해 주세요.'; return; } hhAct('join_household', {p_code: c}); };
 $('hhCreate').onclick = () => hhAct('create_household', {p_name: $('hhName').value});
@@ -909,7 +913,7 @@ $('btnSet').onclick = () => {
   $('btnLeave').style.display = hh ? '' : 'none';
   $('notiDays').value = cfg.notiDays; $('dSet').showModal(); refreshBkInfo();
 };
-$('setClose').onclick = () => $('dSet').close();
+$('setClose').onclick = $('setX').onclick = () => $('dSet').close();
 $('setSave').onclick = () => { cfg = {...cfg, notiDays:Number($('notiDays').value)||0}; store.set('cfg', cfg); $('dSet').close(); toast('저장됨'); };
 /* ---------- 엑셀 내보내기 ---------- */
 function exportRows(list){
@@ -995,7 +999,7 @@ $('impFile').onchange = async e => {
     items = [...items, ...r.recs]; save(); syncSoon(); toast(`${r.recs.length}개 제품을 가져왔어요`, 3500);
   }catch(err){ console.error(err); toast('파일을 읽지 못했습니다. 내보내기 한 .xlsx/.csv 파일인지 확인해 주세요.', 4500); }
 };
-/* ---------- 백업 / 복원 (서버 `backups` 테이블, 리스트별) ---------- */
+/* ---------- 백업 / 복원 (서버 `backups` 테이블, 그룹별) ---------- */
 const BK_KEEP = 150, BK_KIND = {auto:'자동', manual:'수동', 'pre-restore':'복원 전'};
 const bkFmt = iso => { const d = new Date(iso), z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
 const bkMissing = e => e && /relation .*backups|backups.*does not exist|schema cache|PGRST205|42P01/i.test(String(e.message || e.code || e));
@@ -1071,7 +1075,7 @@ async function restoreFrom(snap){
 $('copyCode').onclick = async () => { try{ await navigator.clipboard.writeText($('acCode').value); toast('초대 코드를 복사했어요'); }catch{ $('acCode').select(); toast('코드를 길게 눌러 복사하세요'); } };
 $('btnLogout').onclick = async () => { if (await askConfirm('로그아웃할까요?', '이 기기에 저장된 제품 목록은 지워지고, 다시 로그인하면 서버에서 불러옵니다.', '로그아웃')) { $('dSet').close(); logout(); } };
 $('btnLeave').onclick = async () => {
-  if (!await askConfirm('리스트에서 나갈까요?', '이 계정은 더 이상 이 리스트의 제품을 볼 수 없습니다. 초대 코드가 있으면 다시 참여할 수 있어요.', '나가기')) return;
+  if (!await askConfirm('그룹에서 나갈까요?', '이 계정은 더 이상 이 그룹의 제품을 볼 수 없습니다. 초대 코드가 있으면 다시 참여할 수 있어요.', '나가기')) return;
   const {error} = await sb.rpc('leave_household'); if (error) return toast('처리하지 못했습니다: ' + String(error.message).slice(0, 80), 4000);
   hh = null; store.set('hh', null); resetLocal(); initSb(); $('dSet').close(); showHouse();
 };
