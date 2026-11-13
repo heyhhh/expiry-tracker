@@ -194,6 +194,7 @@ input.bad{outline:2px solid var(--red)}
         <option value="name">이름</option>
         <option value="cat">카테고리</option>
         <option value="qty">수량</option>
+        <option value="created">등록일</option>
         <option value="recent">최근수정</option>
       </select>
       <button type="button" class="sortdir" id="sortDir" aria-label="정렬 방향 전환"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g id="sdUp"><path d="M8 19V5"/><path d="m4 9 4-4 4 4"/></g><g id="sdDn"><path d="M16 5v14"/><path d="m12 15 4 4 4-4"/></g></svg></button></div>
@@ -209,7 +210,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v34</p>
+  <p class="hint" id="verInfo">v35</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 10장) -->
@@ -229,6 +230,7 @@ input.bad{outline:2px solid var(--red)}
 <!-- 등록/수정 -->
 <dialog id="dForm"><form class="sheet" id="form" method="dialog">
   <h2 id="fTitle">제품 등록</h2>
+  <p class="hint" id="fDates" style="display:none;margin-top:-6px"></p>
   <div class="photorow">
     <div class="pthumb" id="fPhotoBox" aria-hidden="true">📦</div>
     <div class="pbtns">
@@ -444,13 +446,24 @@ async function flushLogs(){
 window.addEventListener('error', e => { if (++jsErrCount <= 20) logEvent('js_error', {msg:String(e.message || '').slice(0, 160), src:String(e.filename || '').split('/').pop(), line:e.lineno}, 'error'); });
 window.addEventListener('unhandledrejection', e => { if (++jsErrCount <= 20) logEvent('js_error', {msg:String((e.reason && e.reason.message) || e.reason || '').slice(0, 160), kind:'promise'}, 'error'); });
 
+/* ---------- 등록일(created_at) / 수정일(updated_at) ---------- */
+// 이전에 등록했다가 수량 0 등으로 목록에서 빠진 같은 제품(이름+브랜드 일치)이 있으면 그 제품의 최초 등록일을 이어받음 → 수정일만 새로 기록됨
+function findPastItem(name, brand){
+  const n = String(name || '').trim().toLowerCase(), b = String(brand || '').trim().toLowerCase();
+  if (!n) return null;
+  const c = items.filter(i => (i.deleted || i.status !== 'active') && String(i.name || '').trim().toLowerCase() === n && String(i.brand || '').trim().toLowerCase() === b);
+  c.sort((a, z) => (Number(z.updated_at) || 0) - (Number(a.updated_at) || 0));
+  return c[0] || null;
+}
+const createdOf = i => Number(i && (i.created_at || i.updated_at)) || Date.now();
+const dayOf = ms => bkFmt(ms).slice(0, 10);
 function save(){ store.set('items', items); render(); schedSoon(); }
 function tone(d){ return d <= 1 ? 't-red' : d <= 3 ? 't-org' : d <= 7 ? 't-yel' : 't-grn'; }
 function label(d){ return d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`; }
 
 /* ---------- 정렬 (기준 + 오름/내림차순 버튼) ---------- */
-const SORT_DEFAULT_DIR = {exp:'asc', name:'asc', cat:'asc', qty:'desc', recent:'desc'};
-const SORT_DIR_LABEL = {exp:['기한 임박한 순', '기한 먼 순'], name:['가나다순', '가나다 역순'], cat:['카테고리 순서대로', '카테고리 역순'], qty:['수량 적은 순', '수량 많은 순'], recent:['오래 전 수정한 순', '최근 수정한 순']};
+const SORT_DEFAULT_DIR = {exp:'asc', name:'asc', cat:'asc', qty:'desc', created:'desc', recent:'desc'};
+const SORT_DIR_LABEL = {exp:['기한 임박한 순', '기한 먼 순'], name:['가나다순', '가나다 역순'], cat:['카테고리 순서대로', '카테고리 역순'], qty:['수량 적은 순', '수량 많은 순'], created:['오래된 등록순', '최근 등록순'], recent:['오래 전 수정한 순', '최근 수정한 순']};
 let sortState = (() => {
   const v = store.get('sort', null);
   if (v && typeof v === 'object' && SORT_DEFAULT_DIR[v.f]) return {f:v.f, d:v.d === 'desc' ? 'desc' : 'asc'};
@@ -467,6 +480,7 @@ function sortFn(st){
     case 'name': return (a, b) => sign * byName(a, b) || expAsc(a, b);
     case 'cat': return (a, b) => sign * (CATS.indexOf(a.category) - CATS.indexOf(b.category)) || expAsc(a, b) || byName(a, b);
     case 'qty': return (a, b) => sign * (Number(a.qty) - Number(b.qty)) || expAsc(a, b);
+    case 'created': return (a, b) => sign * (createdOf(a) - createdOf(b)) || expAsc(a, b);
     case 'recent': return (a, b) => sign * ((Number(a.updated_at) || 0) - (Number(b.updated_at) || 0));
     default: return (a, b) => expBy(a, b) || byName(a, b);
   }
@@ -649,6 +663,7 @@ function openForm(item, pre = {}){
   editing = item;
   const v = item || {name:'', brand:'', category:'기타', exp_type:'소비기한', expiry:'', qty:1, memo:'', ...pre};
   $('fTitle').textContent = item ? '제품 수정' : '제품 등록';
+  { const d = $('fDates'); if (item){ d.style.display = ''; d.textContent = `최초 등록 ${dayOf(createdOf(item))} · 마지막 수정 ${bkFmt(item.updated_at)}`; } else { d.style.display = 'none'; d.textContent = ''; } }
   $('fName').value = v.name||''; $('fBrand').value = v.brand||''; $('fCat').value = CATS.includes(v.category) ? v.category : '기타';
   $('fType').value = EXP_TYPES.includes(v.exp_type) ? v.exp_type : '소비기한';
   if (item && !hasExp(item)) $('fType').value = NOEXP;
@@ -673,13 +688,16 @@ $('form').onsubmit = e => {
     memo:$('fMemo').value.trim(), status: editing?.status || 'active', deleted:false, updated_at:Date.now()
   };
   if (!rec.name || (!none && !rec.expiry)) return;
+  const past = editing ? null : findPastItem(rec.name, rec.brand);
+  rec.created_at = editing ? createdOf(editing) : past ? createdOf(past) : rec.updated_at;   // 수정: 등록일 유지 / 재등록: 최초 등록일 이어받음 / 신규: 지금
+  if (past) logEvent('item_readd', {id:rec.id, name:rec.name, created:dayOf(rec.created_at), reason:'처리됐던 제품 재등록'});
   if (editing){
     const ch = {}; for (const k of ['name','brand','category','exp_type','expiry','qty','memo']) if (String(editing[k] ?? '') !== String(rec[k] ?? '')) ch[k] = {from:editing[k] ?? '', to:rec[k] ?? ''};
     if (Object.keys(ch).length) logEvent('item_update', {id:rec.id, name:rec.name, changes:ch});
     if (ch.qty) logEvent(Number(rec.qty) > Number(editing.qty) ? 'qty_up' : 'qty_down', {id:rec.id, name:rec.name, from:Number(editing.qty), to:Number(rec.qty)});
   } else logEvent('item_add', {id:rec.id, name:rec.name, category:rec.category, expiry:rec.expiry || '확인불가', qty:rec.qty, via:'form'});
   items = editing ? items.map(i => i.id === rec.id ? rec : i) : [...items, rec];
-  clearFormDraft(); $('dForm').close(); save(); toast('저장됨'); syncSoon();
+  clearFormDraft(); $('dForm').close(); save(); toast(past ? `이전에 등록했던 제품이에요 — 최초 등록일(${dayOf(rec.created_at)})은 유지돼요` : '저장됨', past ? 4000 : 2200); syncSoon();
 };
 function setStatus(s){ if (!editing) return; logEvent(s === 'done' ? 'item_done' : 'item_discarded', {id:editing.id, name:editing.name, reason:'수정 화면'}); items = items.map(i => i.id === editing.id ? {...i, status:s, updated_at:Date.now()} : i); clearFormDraft(); $('dForm').close(); save(); syncSoon(); }
 $('fDone').onclick = () => setStatus('done');
@@ -891,8 +909,8 @@ $('rvSave').onclick = () => {
     return;
   }
   const now = Date.now();
-  const recs = reviewItems.map((it, k) => ({id:uid(), name:it.name.trim(), brand:it.brand.trim(), category:it.category,
-    exp_type:it.exp_type, expiry:it.exp_type === NOEXP ? null : parseDate(it.expiry), qty:Number(it.qty)||1, barcode:null, photo:it.photo||null, memo:'', status:'active', deleted:false, updated_at:now+k}));
+  const recs = reviewItems.map((it, k) => { const past = findPastItem(it.name, it.brand); return ({id:uid(), created_at: past ? createdOf(past) : now + k, name:it.name.trim(), brand:it.brand.trim(), category:it.category,
+    exp_type:it.exp_type, expiry:it.exp_type === NOEXP ? null : parseDate(it.expiry), qty:Number(it.qty)||1, barcode:null, photo:it.photo||null, memo:'', status:'active', deleted:false, updated_at:now+k}); });
   items = [...items, ...recs]; $('dReview').close(); save(); syncSoon(); logEvent('item_add_bulk', {count:recs.length, names:recs.map(r => r.name).slice(0, 10), via:'photo'}); toast(`${recs.length}개 제품을 등록했습니다`);
 };
 
@@ -909,6 +927,13 @@ async function authHeaders(){
   let tok = ''; try{ const {data} = await sb.auth.getSession(); tok = data.session ? data.session.access_token : ''; }catch{}
   return {'Content-Type':'application/json', apikey:cfg.sbKey, Authorization:'Bearer ' + tok};
 }
+let noCreatedCol = false;   // 서버 items에 created_at 컬럼이 없으면(구버전 DB) 보내지 않음 (앱을 다시 열면 재확인)
+async function upsertItems(rows){
+  const strip = r => { const {created_at, ...x} = r; return x; };
+  let {error} = await sb.from('items').upsert(noCreatedCol ? rows.map(strip) : rows);
+  if (error && !noCreatedCol && /created_at/i.test(String(error.message))){ noCreatedCol = true; ({error} = await sb.from('items').upsert(rows.map(strip))); }
+  return error;
+}
 let syncTimer; const syncSoon = () => { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 600); };
 async function sync(manual){
   if (!sb || !hh){ if (manual) toast(session ? '그룹를 먼저 선택해 주세요.' : '로그인하면 기기 간 동기화됩니다.'); return; }
@@ -917,9 +942,11 @@ async function sync(manual){
     if (error) throw error;
     const local = new Map(items.map(i => [i.id, i])), remote = new Map(data.map(r => [r.id, r]));
     const push = [];
-    for (const [id, l] of local){ const r = remote.get(id); if (!r || l.updated_at > r.updated_at) push.push({...l, household:hh.id}); }
-    for (const [id, r] of remote){ const l = local.get(id); if (!l || r.updated_at > l.updated_at){ const {household, ...rest} = r; local.set(id, rest); } }
-    if (push.length){ const {error:e2} = await sb.from('items').upsert(push); if (e2) throw e2; }
+    for (const [id, l] of local){ const r = remote.get(id); if (!r || l.updated_at > r.updated_at || (l.created_at && r.created_at == null && 'created_at' in r && !noCreatedCol)) push.push({...l, household:hh.id}); }
+    for (const [id, r] of remote){ const l = local.get(id);
+      if (!l || r.updated_at > l.updated_at){ const {household, ...rest} = r; if (rest.created_at == null) { if (l && l.created_at) rest.created_at = l.created_at; else delete rest.created_at; } local.set(id, rest); }
+      else if (l && !l.created_at && r.created_at) local.set(id, {...l, created_at:r.created_at}); }
+    if (push.length){ const e2 = await upsertItems(push); if (e2) throw e2; }
     items = [...local.values()]; store.set('items', items); render();
     await archiveClosed(); flushLogs(); schedSoon();
     if (manual) toast('동기화 완료');
@@ -1028,7 +1055,7 @@ async function archiveClosed(){
     if (error){ if (!histWarned){ histWarned = true; logEvent('history_error', {msg:String(error.message || error).slice(0, 140)}, 'error'); } return; }   // 기록 실패 시 제품은 그대로 둠
     const ids = new Set(closed.map(i => i.id)), now = Date.now();
     items = items.map(i => ids.has(i.id) ? {...i, deleted:true, updated_at:now} : i); store.set('items', items); render();
-    const {error:e2} = await sb.from('items').upsert(items.filter(i => ids.has(i.id)).map(i => ({...i, household:hh.id})));
+    const e2 = await upsertItems(items.filter(i => ids.has(i.id)).map(i => ({...i, household:hh.id})));
     if (e2) logEvent('history_error', {msg:'목록 정리 실패: ' + String(e2.message || e2).slice(0, 120)}, 'error');
     else logEvent('history_archive', {count:closed.length});
   }catch(e){ logEvent('history_error', {msg:String((e && e.message) || e).slice(0, 140)}, 'error'); }
@@ -1045,7 +1072,7 @@ $('btnHist').onclick = async () => {
 $('histX').onclick = () => $('dHist').close();
 
 /* ---------- 활동 로그 보기 ---------- */
-const LOG_LABEL = {item_add:'제품 등록', item_add_bulk:'사진으로 여러 개 등록', item_update:'제품 수정', qty_up:'수량 증가', qty_down:'수량 감소', item_done:'다 먹음 처리', item_discarded:'폐기 처리',
+const LOG_LABEL = {item_add:'제품 등록', item_add_bulk:'사진으로 여러 개 등록', item_update:'제품 수정', item_readd:'처리했던 제품 재등록', qty_up:'수량 증가', qty_down:'수량 감소', item_done:'다 먹음 처리', item_discarded:'폐기 처리',
   history_archive:'처리 기록으로 이전', login:'로그인', signup:'가입', logout:'로그아웃', group_create:'그룹 만들기', group_join:'그룹 참여', group_leave:'그룹 나가기',
   backup_manual:'수동 백업', backup_auto:'자동 백업', 'backup_pre-restore':'복원 전 백업', restore:'백업 복원', import_excel:'엑셀 가져오기', export_excel:'엑셀 내보내기',
   analyze_ok:'사진 분석', analyze_error:'사진 분석 오류', sync_error:'동기화 오류', history_error:'처리 기록 오류', import_error:'가져오기 오류', js_error:'앱 오류'};
@@ -1085,7 +1112,7 @@ function exportRows(list){
   return list.map(i => {
     const has = hasExp(i);
     return {'제품명':i.name||'', '브랜드':i.brand||'', '카테고리':i.category||'', '기한 종류':i.exp_type||'', '기한 날짜':has ? i.expiry : '',
-      '남은 일수':has ? dday(i.expiry) : '', '수량':Number(i.qty)||1, '메모':i.memo||''};
+      '남은 일수':has ? dday(i.expiry) : '', '수량':Number(i.qty)||1, '메모':i.memo||'', '등록일':dayOf(createdOf(i)), '수정일':i.updated_at ? bkFmt(i.updated_at) : ''};
   });
 }
 async function saveWorkbook(wb, fname){
@@ -1106,7 +1133,7 @@ async function exportXlsx(){
       if (data) closed = [...closed, ...data.map(h => ({...(h.data || {}), status:h.reason === 'consumed' ? 'done' : 'discarded', _ended:h.ended_at}))]; }
   }catch{}
   const name = `유통기한_목록_${fmt(today())}`;
-  const cols = [{wch:24},{wch:14},{wch:12},{wch:10},{wch:12},{wch:9},{wch:6},{wch:24}];
+  const cols = [{wch:24},{wch:14},{wch:12},{wch:10},{wch:12},{wch:9},{wch:6},{wch:24},{wch:12},{wch:17}];
   if (window.XLSX){
     const wb = XLSX.utils.book_new();
     const ws1 = XLSX.utils.json_to_sheet(exportRows(active)); ws1['!cols'] = cols; XLSX.utils.book_append_sheet(wb, ws1, '보관 중');
@@ -1154,7 +1181,9 @@ function parseImport(wb){
       const cat = CATS.includes(String(r['카테고리']).trim()) ? String(r['카테고리']).trim() : '기타';
       const st = String(r['처리'] ?? '').trim();
       const status = st === '다 먹음' ? 'done' : st === '폐기' ? 'discarded' : 'active';
-      const rec = {id:uid(), name:name.slice(0, 60), brand:String(r['브랜드'] ?? '').trim().slice(0, 40), category:cat, exp_type:type, expiry:exp || null,
+      const rawC = r['등록일'], cDay = (rawC !== '' && rawC != null) ? cellDate(rawC) : '';
+      const past = findPastItem(name, r['브랜드']);
+      const rec = {id:uid(), created_at: cDay ? new Date(cDay + 'T00:00:00').getTime() : past ? createdOf(past) : now + out.recs.length, name:name.slice(0, 60), brand:String(r['브랜드'] ?? '').trim().slice(0, 40), category:cat, exp_type:type, expiry:exp || null,
         qty:Math.max(1, Math.floor(Number(r['수량'])) || 1), barcode:null, photo:null, memo:String(r['메모'] ?? '').trim().slice(0, 100), status, deleted:false, updated_at:now + out.recs.length};
       { const k = keyOf({...rec, expiry:exp}); if (seen.has(k)){ out.dup++; return; } seen.add(k); }
       out.recs.push(rec);
