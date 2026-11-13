@@ -24,6 +24,7 @@ const PROMPT = `당신은 한국 제품(식품, 의약품, 건강기능식품, �
   "category": "${CATS.join(' | ')} 중 하나 (약은 의약품, 영양제·비타민·홍삼 등은 건강기능식품)",
   "exp_type": "소비기한 | 유통기한 | 사용기한 | null (문구가 보일 때만. 의약품·화장품은 보통 사용기한)",
   "expiry": "YYYY-MM-DD 형식의 기한 날짜, 보이지 않거나 불확실하면 null",
+  "photo": "이 제품의 포장(앞면)이 가장 잘 보이는 사진의 번호(1부터 시작하는 정수). 모르면 null",
   "confidence": "high | medium | low"
  }
 ]}
@@ -34,7 +35,7 @@ function parse(text: string) {
   if (!m) return null;
   try { return JSON.parse(m[0]); } catch { return null; }
 }
-function clean(o: any) {
+function clean(o: any, imageCount = 0) {
   if (!o || typeof o !== 'object') return null;
   const s = (v: unknown) => (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'null' ? v.trim() : null);
   const exp = s(o.expiry);
@@ -47,6 +48,7 @@ function clean(o: any) {
     exp_type: EXP_TYPES.includes(o.exp_type) ? o.exp_type : null,
     expiry: exp && /^\d{4}-\d{2}-\d{2}$/.test(exp) ? exp : null,
     confidence: ['high', 'medium', 'low'].includes(o.confidence) ? o.confidence : 'low',
+    photo: Number.isInteger(Number(o.photo)) && Number(o.photo) >= 1 && Number(o.photo) <= imageCount ? Number(o.photo) : null, // 앱이 이 번호의 사진으로 썸네일을 만든다
   };
 }
 
@@ -140,7 +142,7 @@ Deno.serve(async (req) => {
         const str = typeof text === 'string' ? text : JSON.stringify(text ?? '');
         const parsed = parse(str);
         const rawItems = Array.isArray(parsed?.items) ? parsed.items : (parsed ? [parsed] : []);
-        const list = rawItems.slice(0, 8).map(clean).filter((d: any) => d && (d.name || d.brand || d.expiry));
+        const list = rawItems.slice(0, 8).map((o: any) => clean(o, images.length)).filter((d: any) => d && (d.name || d.brand || d.expiry));
         const data = list[0];
         if (!data) {
           const fin = j?.choices?.[0]?.finish_reason;

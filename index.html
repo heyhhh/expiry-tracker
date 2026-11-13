@@ -100,6 +100,15 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
 .thumb{position:relative;aspect-ratio:1;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--surface2)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb button{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:99px;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:16px;line-height:1;cursor:pointer}
+.ic.has{overflow:hidden;background:var(--surface2)}
+.ic img{width:100%;height:100%;object-fit:cover;display:block}
+.photorow{display:flex;gap:14px;align-items:center}
+.pthumb{width:68px;height:68px;border-radius:18px;overflow:hidden;background:var(--surface2);display:grid;place-items:center;font-size:32px;flex:none}
+.pthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.pbtns{display:flex;gap:8px;flex-wrap:wrap}
+.btn.sm{flex:none;padding:9px 13px;font-size:14px;text-align:center}
+.rvph{width:34px;height:34px;border-radius:10px;object-fit:cover}
+.rv-left{display:flex;align-items:center;gap:8px}
 .datebox{position:relative}
 .datebox input[type=text]{padding-right:36px}
 .datebox .dpick{position:absolute;right:0;top:0;width:44px;height:100%;opacity:0;cursor:pointer;padding:0;border:0;margin:0}
@@ -171,7 +180,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v17</p>
+  <p class="hint" id="verInfo">v18</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -191,6 +200,13 @@ input.bad{outline:2px solid var(--red)}
 <!-- 등록/수정 -->
 <dialog id="dForm"><form class="sheet" id="form" method="dialog">
   <h2 id="fTitle">제품 등록</h2>
+  <div class="photorow">
+    <div class="pthumb" id="fPhotoBox" aria-hidden="true">📦</div>
+    <div class="pbtns">
+      <label class="btn sm" style="cursor:pointer">📷 <span id="fPhotoLbl">사진 추가</span><input type="file" id="fPhotoInput" accept="image/*" hidden></label>
+      <button type="button" class="btn sm" id="fPhotoDel" style="display:none">사진 삭제</button>
+    </div>
+  </div>
   <label>제품명<input id="fName" required></label>
   <div class="row">
     <label>브랜드<input id="fBrand"></label>
@@ -318,7 +334,7 @@ function render(){
     .sort((a,b) => a.expiry.localeCompare(b.expiry));
   $('list').innerHTML = rows.length ? rows.map(i => { const d = dday(i.expiry);
     return `<div class="card ${tone(d)}" data-id="${esc(i.id)}">
-      <div class="ic" aria-hidden="true">${ICONS[i.category]||'📦'}</div>
+      <div class="ic ${i.photo?'has':''}" aria-hidden="true">${i.photo ? `<img src="${esc(i.photo)}" alt="" loading="lazy">` : (ICONS[i.category]||'📦')}</div>
       <div class="info"><div class="n">${esc(i.name)}</div>
         <div class="m">${esc([i.brand, i.category].filter(Boolean).join(' · '))}</div>
         <div class="m">${esc(i.exp_type||'')} ${fmtShort(i.expiry)}${i.memo?' · '+esc(i.memo):''}</div></div>
@@ -360,6 +376,30 @@ $('fExpT').addEventListener('input', () => $('fExpT').classList.remove('bad'));
 $('fExp').addEventListener('change', () => { setExp($('fExp').value); saveDraft(); });
 $('quick').onclick = e => { const n = e.target.dataset.n; if (!n) return; const d = today(); d.setDate(d.getDate()+Number(n)); setExp(fmt(d)); saveDraft(); };
 
+/* ---------- 제품 사진(썸네일) ---------- */
+let formPhoto = '';
+// 가운데를 정사각형으로 잘라 160px JPEG로 줄임(약 5~10KB). src: File/Blob 또는 data URL
+async function makeThumb(src, size = 160){
+  const blob = src instanceof Blob ? src : await (await fetch(src)).blob();
+  const bmp = await createImageBitmap(blob);
+  const k = Math.min(bmp.width, bmp.height);
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  c.getContext('2d').drawImage(bmp, (bmp.width-k)/2, (bmp.height-k)/2, k, k, 0, 0, size, size);
+  return c.toDataURL('image/jpeg', .72);
+}
+function renderFormPhoto(){
+  $('fPhotoBox').innerHTML = formPhoto ? `<img src="${esc(formPhoto)}" alt="">` : (ICONS[$('fCat').value] || '📦');
+  $('fPhotoLbl').textContent = formPhoto ? '사진 바꾸기' : '사진 추가';
+  $('fPhotoDel').style.display = formPhoto ? '' : 'none';
+}
+$('fCat').addEventListener('change', () => { if (!formPhoto) renderFormPhoto(); });
+$('fPhotoInput').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try{ formPhoto = await makeThumb(f); renderFormPhoto(); saveDraft(); }
+  catch{ toast('사진을 불러오지 못했습니다. 다시 시도해 주세요.'); }
+};
+$('fPhotoDel').onclick = () => { formPhoto = ''; renderFormPhoto(); saveDraft(); };
+
 function openForm(item, pre = {}){
   editing = item;
   const v = item || {name:'', brand:'', category:'기타', exp_type:'소비기한', expiry:'', qty:1, memo:'', ...pre};
@@ -367,6 +407,7 @@ function openForm(item, pre = {}){
   $('fName').value = v.name||''; $('fBrand').value = v.brand||''; $('fCat').value = CATS.includes(v.category) ? v.category : '기타';
   $('fType').value = EXP_TYPES.includes(v.exp_type) ? v.exp_type : '소비기한'; setExp(v.expiry||''); $('fQty').value = v.qty||1;
   $('fMemo').value = v.memo||'';
+  formPhoto = (item ? item.photo : pre.photo) || ''; renderFormPhoto();
   $('fDone').style.display = $('fDiscard').style.display = item ? '' : 'none';
   $('aiNote').style.display = 'none';
   $('dForm').showModal();
@@ -379,7 +420,7 @@ $('form').onsubmit = e => {
   if (!exp){ $('fExpT').classList.add('bad'); $('fExpT').focus(); return toast('기한 날짜를 확인해 주세요 (예: 2027-03-05, 270305)', 3500); }
   const rec = {
     id: editing?.id || uid(), name:$('fName').value.trim(), brand:$('fBrand').value.trim(), category:$('fCat').value,
-    exp_type:$('fType').value, expiry:exp, qty:Number($('fQty').value)||1, barcode:editing?.barcode ?? null,
+    exp_type:$('fType').value, expiry:exp, qty:Number($('fQty').value)||1, barcode:editing?.barcode ?? null, photo: formPhoto || null,
     memo:$('fMemo').value.trim(), status: editing?.status || 'active', deleted:false, updated_at:Date.now()
   };
   if (!rec.name || !rec.expiry) return;
@@ -395,7 +436,7 @@ $('fDiscard').onclick = () => setStatus('discarded');
 function saveDraft(){
   if (!$('dForm').open) return;
   store.set('draft', {id: editing ? editing.id : null, v:{name:$('fName').value, brand:$('fBrand').value, category:$('fCat').value,
-    exp_type:$('fType').value, expiry:$('fExpT').value, qty:$('fQty').value, memo:$('fMemo').value}});
+    exp_type:$('fType').value, expiry:$('fExpT').value, qty:$('fQty').value, memo:$('fMemo').value, photo:formPhoto}});
 }
 $('form').addEventListener('input', saveDraft);
 $('form').addEventListener('change', saveDraft);
@@ -407,7 +448,7 @@ function restoreDraft(){
   openForm(base || null, {});
   const v = d.v;
   $('fName').value = v.name; $('fBrand').value = v.brand; $('fCat').value = v.category; $('fType').value = v.exp_type;
-  setExp(v.expiry); $('fQty').value = v.qty; $('fMemo').value = v.memo;
+  setExp(v.expiry); $('fQty').value = v.qty; $('fMemo').value = v.memo; formPhoto = v.photo || ''; renderFormPhoto();
   toast('작성 중이던 내용을 복원했습니다');
 }
 
@@ -422,7 +463,7 @@ $('addAi').onclick = () => {
   $('dAdd').close(); photos = []; renderThumbs(); $('dPhotos').showModal();
   markCamPending(); try{ $('photoInput').click(); }catch{}          // 바로 카메라가 열리도록 (취소해도 "사진 찍기"로 다시 가능)
 };
-const clearPhotoDraft = () => { photos = []; try{ localStorage.removeItem('photoDraft'); }catch{} };
+const clearPhotoDraft = () => { photos = []; clearCamPending(); try{ localStorage.removeItem('photoDraft'); }catch{} };
 $('photosClose').onclick = () => { clearPhotoDraft(); $('dPhotos').close(); };
 $('dPhotos').addEventListener('close', () => { photos = []; try{ localStorage.removeItem('photoDraft'); }catch{} });
 // 카메라 앱에 다녀오다 폰이 페이지를 다시 불러와도 찍어 둔 사진이 남도록 임시 저장
@@ -463,7 +504,7 @@ $('photoInput').onchange = async e => {
 };
 // 앨범에서 여러 장을 한 번에 (카메라 앱으로 미리 찍어 둔 사진)
 $('photoPick').onchange = async e => {
-  const files = [...e.target.files]; e.target.value = '';
+  const files = [...e.target.files]; e.target.value = ''; clearCamPending();
   let skipped = 0;
   for (const f of files){
     if (photos.length >= MAX_PHOTOS){ skipped++; continue; }
@@ -493,20 +534,27 @@ async function callAnalyze(images){
 }
 $('doAnalyze').onclick = async () => {
   if (!photos.length) return;
+  clearCamPending();
   if (!cfg.sbUrl || !cfg.sbKey || !cfg.aiToken) return toast('⚙ 설정에 "AI 분석 토큰"을 입력하세요', 3500);
   const btn = $('doAnalyze'); btn.disabled = true; btn.textContent = '🤖 분석 중… (최대 1~2분)';
   toast('🤖 AI가 사진을 분석 중입니다', 100000);
   try{
-    const res = await callAnalyze(photos.slice());
+    const src = photos.slice();
+    const res = await callAnalyze(src);
     const list = (Array.isArray(res.items) && res.items.length) ? res.items : [res.data];
+    // 제품별 썸네일: AI가 알려준 사진 번호 → 없으면 (제품이 1개일 때) 첫 사진 → 그래도 없으면 이모지 아이콘
+    const thumbs = await Promise.all(list.map(async it => {
+      const idx = it.photo ? it.photo - 1 : (list.length === 1 ? 0 : -1);
+      try{ return idx >= 0 && src[idx] ? await makeThumb(src[idx]) : ''; }catch{ return ''; }
+    }));
     clearPhotoDraft(); $('dPhotos').close();
     if (list.length > 1){
-      openReview(list);
+      openReview(list.map((it, i) => ({...it, photo: thumbs[i]})));
       toast(`제품 ${list.length}개를 인식했어요 — 확인/수정 후 등록하세요`, 4500);
     } else {
       const ai = list[0];
       openForm(null, {name: ai.name || '', brand: ai.brand || '', category: ai.category || '기타',
-        exp_type: ai.exp_type || '소비기한', expiry: ai.expiry || ''});
+        exp_type: ai.exp_type || '소비기한', expiry: ai.expiry || '', photo: thumbs[0]});
       $('aiNote').style.display = '';
       if (ai.expiry){ $('fExpT').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExpT').style.outline = '', 6000); }
       toast(ai.confidence === 'low' ? '자동 입력됨 — 확신도 낮음, 꼭 확인하세요' : '자동 입력됨 — 확인/수정하세요', 4000);
@@ -522,13 +570,13 @@ $('doAnalyze').onclick = async () => {
 let reviewItems = [];
 function openReview(list){
   reviewItems = list.map(x => ({name:x.name||'', brand:x.brand||'', category:CATS.includes(x.category)?x.category:'기타',
-    exp_type:EXP_TYPES.includes(x.exp_type)?x.exp_type:'소비기한', expiry:x.expiry||'', qty:1}));
+    exp_type:EXP_TYPES.includes(x.exp_type)?x.exp_type:'소비기한', expiry:x.expiry||'', qty:1, photo: typeof x.photo === 'string' ? x.photo : ''}));
   renderReview(); $('dReview').showModal();
 }
 function renderReview(){
   $('rvTitle').textContent = `인식된 제품 ${reviewItems.length}개`;
   $('rvList').innerHTML = reviewItems.map((it, i) => `<div class="rv" data-i="${i}">
-    <div class="rv-head"><b>${i+1}</b><button type="button" class="rv-del" data-del="${i}" aria-label="이 제품 빼기">×</button></div>
+    <div class="rv-head"><div class="rv-left"><b>${i+1}</b>${it.photo ? `<img class="rvph" src="${esc(it.photo)}" alt="">` : ''}</div><button type="button" class="rv-del" data-del="${i}" aria-label="이 제품 빼기">×</button></div>
     <label>제품명<input data-f="name" value="${esc(it.name)}"></label>
     <div class="row"><label>브랜드<input data-f="brand" value="${esc(it.brand)}"></label>
       <label>카테고리<select data-f="category">${CATS.map(c => `<option ${c===it.category?'selected':''}>${c}</option>`).join('')}</select></label></div>
@@ -570,7 +618,7 @@ $('rvSave').onclick = () => {
   }
   const now = Date.now();
   const recs = reviewItems.map((it, k) => ({id:uid(), name:it.name.trim(), brand:it.brand.trim(), category:it.category,
-    exp_type:it.exp_type, expiry:parseDate(it.expiry), qty:Number(it.qty)||1, barcode:null, memo:'', status:'active', deleted:false, updated_at:now+k}));
+    exp_type:it.exp_type, expiry:parseDate(it.expiry), qty:Number(it.qty)||1, barcode:null, photo:it.photo||null, memo:'', status:'active', deleted:false, updated_at:now+k}));
   items = [...items, ...recs]; $('dReview').close(); save(); syncSoon(); toast(`${recs.length}개 제품을 등록했습니다`);
 };
 
