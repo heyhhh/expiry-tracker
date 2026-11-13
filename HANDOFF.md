@@ -312,3 +312,9 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 - 처리 기록: 수량이 0이 되어 `다 먹음`/`폐기` 처리된 제품은 서버 `item_history`(제품당 1건, 처리 당시 사본 jsonb, 수정/삭제 불가, 그룹 멤버만 조회)로 옮기고 `items`에서는 soft delete(`archiveClosed()`, 동기화 때마다 실행; 기록 저장 실패 시 제품은 그대로 둠). 설정 → `📜 처리 기록`에서 조회. 엑셀 내보내기의 `처리됨` 시트도 이 기록을 사용.
 - 로그: `logEvent(action, detail, level)`가 localStorage 큐(`logq`, 최대 300)에 쌓고 3초 뒤/동기화 때 서버 `app_logs`로 전송(실패 시 큐 유지). 기록 대상: 제품 등록·수정(필드별 변경)·수량 증가/감소·다 먹음/폐기·사진 분석·로그인/가입/로그아웃·그룹 생성/참여/나가기·백업/복원·엑셀 가져오기/내보내기, 오류(`js_error`, 동기화/분석/가져오기/기록 오류). 설정 → `📋 활동 로그`(전체/오류만).
 - 테이블 생성은 `supabase/history_logs.sql`(사용자가 SQL Editor에서 실행). 이 SQL 실행 전에는 로그가 큐에 쌓이기만 하고, 처리 기록 이전은 하지 않음(제품은 기존처럼 숨김 상태 유지).
+
+## 29. v30: Android 앱(Capacitor) 빌드 준비 — 가족용
+- 목표: 가족끼리만 사용. Android는 APK 직접 설치, iOS는 PWA(홈 화면에 추가) 또는 Apple 개발자 계정이 생기면 TestFlight.
+- 구성: `package.json`(Capacitor 6 + local-notifications/filesystem/share), `capacitor.config.json`(appId `io.github.heyhhh.expirykeeper`, webDir `www`), `scripts/build-www.js`(웹 파일 → www), `scripts/patch-android.js`(카메라/알림 권한), `assets/`(아이콘 PNG), `.github/workflows/android.yml`(수동 실행 → `cap add android` → 아이콘 생성 → `assembleDebug` → Releases에 `expiry-keeper.apk` 업로드). `android/`·`www/`·`node_modules/`는 커밋하지 않음(CI에서 생성).
+- 웹 코드: Supabase/SheetJS를 `vendor/`로 내장(CDN 제거), `NATIVE` 판별 → 앱에서는 제품별 기한 알림을 기기에 예약(`scheduleNative()`, 기한 N일 전·당일 09:00, 최대 60개, 앱이 꺼져 있어도 울림), 엑셀 내보내기는 공유 시트(`saveWorkbook()`).
+- 미검증: 실제 APK 빌드/설치(CI 최초 실행 전). iOS는 Mac/Xcode와 Apple 개발자 계정(연 99달러) 필요.
