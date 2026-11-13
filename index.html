@@ -93,6 +93,8 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
 .btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
 .btn.dng{color:var(--red)}
 .btn[disabled]{opacity:.45;cursor:not-allowed}
+.t-none{--tone:var(--sub);--tone-bg:rgba(120,120,130,.14)}
+.expset{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .quick{display:flex;gap:6px;flex-wrap:wrap}
 .quick button{font-size:13px;padding:7px 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface2);cursor:pointer}
 .hint{font-size:12px;color:var(--sub);margin:0}
@@ -184,7 +186,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v20</p>
+  <p class="hint" id="verInfo">v21</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -217,9 +219,10 @@ input.bad{outline:2px solid var(--red)}
     <label>카테고리<select id="fCat"></select></label>
   </div>
   <div class="row">
-    <label>기한 종류<select id="fType"><option>소비기한</option><option>유통기한</option><option>사용기한</option></select></label>
-    <label>기한 날짜<div class="datebox"><input id="fExpT" type="text" inputmode="numeric" autocomplete="off" placeholder="2027-03-05 또는 270305" required><input type="date" class="dpick" id="fExp" aria-label="달력에서 선택"><span class="calico" aria-hidden="true">📅</span></div></label>
+    <label>기한 종류<select id="fType"><option>소비기한</option><option>유통기한</option><option>사용기한</option><option>확인불가</option></select></label>
+    <label id="expLbl">기한 날짜<div class="datebox"><input id="fExpT" type="text" inputmode="numeric" autocomplete="off" placeholder="2027-03-05 또는 270305"><input type="date" class="dpick" id="fExp" aria-label="달력에서 선택"><span class="calico" aria-hidden="true">📅</span></div></label>
   </div>
+  <div class="expset" id="expNone" style="display:none"><button type="button" class="btn sm" id="expSet">📅 기한 날짜 설정하기</button><span class="hint">기한을 모르면 이대로 두세요 (기한 없음으로 등록)</span></div>
   <p class="hint" id="expHint" style="margin-top:-4px">숫자만 입력해도 됩니다 (예: 20270305, 270305). 오른쪽 📅를 누르면 달력으로 고를 수 있어요.</p>
   <p class="hint" id="aiNote" style="display:none;color:var(--org)">🤖 AI가 읽은 값입니다. 특히 <b>기한 날짜는 포장과 꼭 대조</b>하세요.</p>
   <div class="quick" id="quick"></div>
@@ -280,7 +283,8 @@ input.bad{outline:2px solid var(--red)}
 <script>
 const $ = id => document.getElementById(id);
 const CATS = ['유제품','육류','수산물','채소/과일','음료','과자/간식','냉동식품','가공식품','소스/양념','의약품','건강기능식품','화장품','생활용품','기타'];
-const EXP_TYPES = ['소비기한','유통기한','사용기한'];
+const NOEXP = '확인불가';
+const EXP_TYPES = ['소비기한','유통기한','사용기한', NOEXP];
 const ICONS = {'유제품':'🥛','육류':'🥩','수산물':'🐟','채소/과일':'🥬','음료':'🥤','과자/간식':'🍪','냉동식품':'🧊','가공식품':'🥫','소스/양념':'🧂','의약품':'💊','건강기능식품':'🌿','화장품':'🧴','생활용품':'🧻','기타':'📦'};
 const DOW = ['일','월','화','수','목','금','토'];
 const store = {
@@ -297,6 +301,7 @@ try{ const m = location.hash.match(/[#&]h=([^&]+)/), t = location.hash.match(/[#
 let filter = '전체', q = '', editing = null, sb = null;
 
 const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+const hasExp = i => !!(i && i.expiry);
 const dday = s => Math.round((new Date(s+'T00:00:00') - today())/864e5);
 const fmt = d => { const z = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; };
 const fmtShort = s => { const d = new Date(s+'T00:00:00'); return `${d.getMonth()+1}.${d.getDate()}(${DOW[d.getDay()]})`; };
@@ -340,8 +345,8 @@ function label(d){ return d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`; }
 
 function render(){
   const active = items.filter(i => !i.deleted && i.status === 'active');
-  $('sExp').textContent = active.filter(i => dday(i.expiry) <= 0).length;
-  $('sSoon').textContent = active.filter(i => { const d = dday(i.expiry); return d > 0 && d <= 3; }).length;
+  $('sExp').textContent = active.filter(i => hasExp(i) && dday(i.expiry) <= 0).length;
+  $('sSoon').textContent = active.filter(i => { if (!hasExp(i)) return false; const d = dday(i.expiry); return d > 0 && d <= 3; }).length;
   $('sAll').textContent = active.length;
   const cats = ['전체', ...CATS.filter(c => active.some(i => i.category === c))];
   if (!cats.includes(filter)) filter = '전체';
@@ -350,14 +355,14 @@ function render(){
   const rows = active
     .filter(i => filter === '전체' || i.category === filter)
     .filter(i => !q || [i.name, i.brand, i.memo, i.category].some(v => String(v||'').toLowerCase().includes(q)))
-    .sort((a,b) => a.expiry.localeCompare(b.expiry));
-  $('list').innerHTML = rows.length ? rows.map(i => { const d = dday(i.expiry);
-    return `<div class="card ${tone(d)}" data-id="${esc(i.id)}">
+    .sort((a,b) => (a.expiry || '9999').localeCompare(b.expiry || '9999'));      // 기한 없음은 맨 뒤
+  $('list').innerHTML = rows.length ? rows.map(i => { const nx = !hasExp(i), d = nx ? 0 : dday(i.expiry);
+    return `<div class="card ${nx ? 't-none' : tone(d)}" data-id="${esc(i.id)}">
       <div class="ic ${i.photo?'has':''}" aria-hidden="true">${i.photo ? imgHtml(i.photo, ICONS[i.category]||'📦') : (ICONS[i.category]||'📦')}</div>
       <div class="info"><div class="n">${esc(i.name)}</div>
         <div class="m">${esc([i.brand, i.category].filter(Boolean).join(' · '))}</div>
-        <div class="m">${esc(i.exp_type||'')} ${fmtShort(i.expiry)}${i.memo?' · '+esc(i.memo):''}</div></div>
-      <div class="right"><span class="pill ${d<=0?'solid':''}">${label(d)}</span><div class="qty" data-qty="${esc(i.id)}">×${esc(i.qty)}</div></div>
+        <div class="m">${nx ? '기한 확인불가' : esc(i.exp_type||'') + ' ' + fmtShort(i.expiry)}${i.memo?' · '+esc(i.memo):''}</div></div>
+      <div class="right"><span class="pill ${!nx && d<=0?'solid':''}">${nx ? '기한없음' : label(d)}</span><div class="qty" data-qty="${esc(i.id)}">×${esc(i.qty)}</div></div>
     </div>`; }).join('')
     : (q || filter !== '전체'
         ? `<div class="empty"><div class="big">🔍</div>조건에 맞는 제품이 없습니다.</div>`
@@ -398,6 +403,17 @@ function updateExpHint(){
   if (digits > 0 && digits < 8 && !(digits === 6 && !raw.startsWith('20'))){ h.textContent = `계속 입력하세요 — YYMMDD(6자리) 또는 YYYYMMDD(8자리). 지금 ${digits}자리`; h.style.color = 'var(--sub)'; }
   else { h.textContent = '날짜 형식을 확인해 주세요 (예: 2027-03-05, 270305)'; h.style.color = 'var(--red)'; }
 }
+// 기한 종류가 '확인불가'이면 날짜 입력을 숨기고, 날짜를 설정하려는 순간(종류 선택/버튼) 보여줌
+let lastRealType = '소비기한';
+function syncExpUI(){
+  const none = $('fType').value === NOEXP;
+  $('expLbl').style.display = $('quick').style.display = $('expHint').style.display = none ? 'none' : '';
+  $('expNone').style.display = none ? '' : 'none';
+  if (none){ $('fExpT').value = ''; $('fExp').value = ''; $('fExpT').dataset.norm = ''; $('fExpT').classList.remove('bad'); }
+  else { lastRealType = $('fType').value; updateExpHint(); }
+}
+$('fType').addEventListener('change', () => { syncExpUI(); if ($('fType').value !== NOEXP) setTimeout(() => { if (!$('fExpT').value) $('fExpT').focus(); }, 0); });
+$('expSet').onclick = () => { $('fType').value = lastRealType; syncExpUI(); saveDraft(); $('fExpT').focus(); };
 function setExp(v){ const t = $('fExpT'); t.value = v || ''; $('fExp').value = parseDate(v) || ''; t.dataset.norm = parseDate(v) || ''; t.classList.remove('bad'); updateExpHint(); }
 function normExp(){
   const t = $('fExpT'), p = parseDate(t.value);
@@ -497,7 +513,10 @@ function openForm(item, pre = {}){
   const v = item || {name:'', brand:'', category:'기타', exp_type:'소비기한', expiry:'', qty:1, memo:'', ...pre};
   $('fTitle').textContent = item ? '제품 수정' : '제품 등록';
   $('fName').value = v.name||''; $('fBrand').value = v.brand||''; $('fCat').value = CATS.includes(v.category) ? v.category : '기타';
-  $('fType').value = EXP_TYPES.includes(v.exp_type) ? v.exp_type : '소비기한'; setExp(v.expiry||''); $('fQty').value = v.qty||1;
+  $('fType').value = EXP_TYPES.includes(v.exp_type) ? v.exp_type : '소비기한';
+  if (item && !hasExp(item)) $('fType').value = NOEXP;
+  if (v.exp_type && v.exp_type !== NOEXP) lastRealType = v.exp_type; else lastRealType = '소비기한';
+  setExp(v.expiry||''); syncExpUI(); $('fQty').value = v.qty||1;
   $('fMemo').value = v.memo||'';
   formPhoto = (item ? item.photo : pre.photo) || ''; photoCleared = false; formImages = []; renderFormPhoto();
   $('fDone').style.display = $('fDiscard').style.display = item ? '' : 'none';
@@ -508,14 +527,15 @@ const clearFormDraft = () => store.set('draft', null);
 $('fCancel').onclick = () => { clearFormDraft(); $('dForm').close(); };
 $('form').onsubmit = e => {
   e.preventDefault();
-  const exp = parseDate($('fExpT').value);
-  if (!exp){ $('fExpT').classList.add('bad'); $('fExpT').focus(); return toast('기한 날짜를 확인해 주세요 (예: 2027-03-05, 270305)', 3500); }
+  const none = $('fType').value === NOEXP;
+  const exp = none ? null : parseDate($('fExpT').value);
+  if (!none && !exp){ $('fExpT').classList.add('bad'); $('fExpT').focus(); return toast('기한 날짜를 확인해 주세요 (예: 2027-03-05, 270305)', 3500); }
   const rec = {
     id: editing?.id || uid(), name:$('fName').value.trim(), brand:$('fBrand').value.trim(), category:$('fCat').value,
     exp_type:$('fType').value, expiry:exp, qty:Number($('fQty').value)||1, barcode:editing?.barcode ?? null, photo: formPhoto || null,
     memo:$('fMemo').value.trim(), status: editing?.status || 'active', deleted:false, updated_at:Date.now()
   };
-  if (!rec.name || !rec.expiry) return;
+  if (!rec.name || (!none && !rec.expiry)) return;
   items = editing ? items.map(i => i.id === rec.id ? rec : i) : [...items, rec];
   clearFormDraft(); $('dForm').close(); save(); toast('저장됨'); syncSoon();
 };
@@ -540,7 +560,7 @@ function restoreDraft(){
   openForm(base || null, {});
   const v = d.v;
   $('fName').value = v.name; $('fBrand').value = v.brand; $('fCat').value = v.category; $('fType').value = v.exp_type;
-  setExp(v.expiry); $('fQty').value = v.qty; $('fMemo').value = v.memo; formPhoto = v.photo || ''; renderFormPhoto();
+  setExp(v.expiry); syncExpUI(); $('fQty').value = v.qty; $('fMemo').value = v.memo; formPhoto = v.photo || ''; renderFormPhoto();
   toast('작성 중이던 내용을 복원했습니다');
 }
 
@@ -641,10 +661,11 @@ $('doAnalyze').onclick = async () => {
     } else {
       const ai = list[0];
       openForm(null, {name: ai.name || '', brand: ai.brand || '', category: ai.category || '기타',
-        exp_type: ai.exp_type || '소비기한', expiry: ai.expiry || ''});
+        exp_type: parseDate(ai.expiry) ? (ai.exp_type && ai.exp_type !== NOEXP ? ai.exp_type : '소비기한') : NOEXP, expiry: parseDate(ai.expiry) || ''});
+      if (!parseDate(ai.expiry) && ai.exp_type && ai.exp_type !== NOEXP) lastRealType = ai.exp_type;
       autoImage();
       $('aiNote').style.display = '';
-      if (ai.expiry){ $('fExpT').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExpT').style.outline = '', 6000); }
+      if (parseDate(ai.expiry)){ $('fExpT').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExpT').style.outline = '', 6000); }
       toast(ai.confidence === 'low' ? '자동 입력됨 — 확신도 낮음, 꼭 확인하세요' : '자동 입력됨 — 확인/수정하세요', 4000);
     }
   }catch(e){
@@ -670,7 +691,7 @@ function fetchReviewImages(){
 }
 function openReview(list){
   reviewItems = list.map(x => ({name:x.name||'', brand:x.brand||'', category:CATS.includes(x.category)?x.category:'기타',
-    exp_type:EXP_TYPES.includes(x.exp_type)?x.exp_type:'소비기한', expiry:x.expiry||'', qty:1, photo:'', rid:++rvSeq}));
+    exp_type:parseDate(x.expiry) ? (EXP_TYPES.includes(x.exp_type) && x.exp_type !== NOEXP ? x.exp_type : '소비기한') : NOEXP, expiry:parseDate(x.expiry)||'', qty:1, photo:'', rid:++rvSeq}));
   renderReview(); $('dReview').showModal(); fetchReviewImages();
 }
 function renderReview(){
@@ -681,7 +702,7 @@ function renderReview(){
     <div class="row"><label>브랜드<input data-f="brand" value="${esc(it.brand)}"></label>
       <label>카테고리<select data-f="category">${CATS.map(c => `<option ${c===it.category?'selected':''}>${c}</option>`).join('')}</select></label></div>
     <div class="row3"><label>기한 종류<select data-f="exp_type">${EXP_TYPES.map(t => `<option ${t===it.exp_type?'selected':''}>${t}</option>`).join('')}</select></label>
-      <label>기한 날짜<div class="datebox"><input data-f="expiry" type="text" inputmode="numeric" autocomplete="off" placeholder="2027-03-05" value="${esc(it.expiry)}" data-norm="${esc(parseDate(it.expiry)||'')}"><input type="date" class="dpick" data-pick value="${esc(parseDate(it.expiry)||'')}" aria-label="달력에서 선택"><span class="calico" aria-hidden="true">📅</span></div></label>
+      <label data-dl style="${it.exp_type===NOEXP?'display:none':''}">기한 날짜<div class="datebox"><input data-f="expiry" type="text" inputmode="numeric" autocomplete="off" placeholder="2027-03-05" value="${esc(it.expiry)}" data-norm="${esc(parseDate(it.expiry)||'')}"><input type="date" class="dpick" data-pick value="${esc(parseDate(it.expiry)||'')}" aria-label="달력에서 선택"><span class="calico" aria-hidden="true">📅</span></div></label>
       <label>수량<input type="number" min="1" data-f="qty" value="${esc(it.qty)}" inputmode="numeric"></label></div>
   </div>`).join('');
 }
@@ -697,6 +718,11 @@ const rvEdit = e => {
     if (n && e.target.value.length > n.length && e.target.value.startsWith(n)) e.target.value = e.target.value.slice(n.length);
   }
   it[f] = e.target.value;
+  if (f === 'exp_type'){                           // 확인불가면 날짜칸 숨김, 다른 종류를 고르면 날짜칸 표시
+    const dl = box.querySelector('[data-dl]'); dl.style.display = it.exp_type === NOEXP ? 'none' : '';
+    if (it.exp_type === NOEXP){ it.expiry = ''; dl.querySelector('[data-f="expiry"]').value = ''; dl.querySelector('[data-pick]').value = ''; }
+    else if (!it.expiry) dl.querySelector('[data-f="expiry"]').focus();
+  }
   if (f === 'expiry'){
     if (e.type === 'change'){                      // 직접 입력한 날짜는 입력을 마치면 YYYY-MM-DD로 정리
       const p = parseDate(e.target.value);
@@ -715,7 +741,7 @@ $('rvList').onclick = e => {
 };
 $('rvCancel').onclick = () => $('dReview').close();
 $('rvSave').onclick = () => {
-  const bad = reviewItems.findIndex(it => !it.name.trim() || !parseDate(it.expiry));
+  const bad = reviewItems.findIndex(it => !it.name.trim() || (it.exp_type !== NOEXP && !parseDate(it.expiry)));
   if (bad >= 0){
     toast(`${bad+1}번 제품의 제품명과 기한 날짜(예: 2027-03-05, 270305)를 확인해 주세요`, 3500);
     const box = $('rvList').children[bad]; box.scrollIntoView({block:'center'}); box.style.outline = '2px solid var(--org)'; setTimeout(() => box.style.outline = '', 3000);
@@ -723,7 +749,7 @@ $('rvSave').onclick = () => {
   }
   const now = Date.now();
   const recs = reviewItems.map((it, k) => ({id:uid(), name:it.name.trim(), brand:it.brand.trim(), category:it.category,
-    exp_type:it.exp_type, expiry:parseDate(it.expiry), qty:Number(it.qty)||1, barcode:null, photo:it.photo||null, memo:'', status:'active', deleted:false, updated_at:now+k}));
+    exp_type:it.exp_type, expiry:it.exp_type === NOEXP ? null : parseDate(it.expiry), qty:Number(it.qty)||1, barcode:null, photo:it.photo||null, memo:'', status:'active', deleted:false, updated_at:now+k}));
   items = [...items, ...recs]; $('dReview').close(); save(); syncSoon(); toast(`${recs.length}개 제품을 등록했습니다`);
 };
 
@@ -767,7 +793,7 @@ $('notiPerm').onclick = async () => {
   const p = await Notification.requestPermission(); toast(p === 'granted' ? '알림 허용됨' : '알림이 거부되었습니다');
 };
 function checkAlerts(){
-  const soon = items.filter(i => !i.deleted && i.status === 'active' && dday(i.expiry) <= cfg.notiDays).sort((a,b)=>a.expiry.localeCompare(b.expiry));
+  const soon = items.filter(i => !i.deleted && i.status === 'active' && hasExp(i) && dday(i.expiry) <= cfg.notiDays).sort((a,b)=>a.expiry.localeCompare(b.expiry));
   if (!soon.length) return;
   const key = 'alerted-' + fmt(today()); if (store.get(key, false)) return;
   const body = soon.slice(0,5).map(i => `${i.name} (${label(dday(i.expiry))})`).join('\n');

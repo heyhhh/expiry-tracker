@@ -275,3 +275,8 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 - 함수는 `https://naverapihub.apigw.ntruss.com/search/v1/{shop,image}`를 먼저 호출하고, 실패 시 기존 `openapi.naver.com`으로 대체. 두 종류의 헤더를 모두 전송.
 - 시크릿 ID/Secret이 바뀌어 저장돼도 길이로 자동 교정(ID가 더 길면 맞바꿈).
 - 확인: HUB `shop`은 404(미지원), `image`는 정상(source=`image`, 신라면 검색에 제품 썸네일 포함). 응답에 `tried` 진단 배열이 포함됨.
+
+## 22. v21: 기한 '확인불가' + 날짜 입력 선택화
+- DB: `items.expiry` NOT NULL 해제(migration `items_expiry_nullable`). 기한 없음 = `exp_type='확인불가'`, `expiry=null`.
+- AI가 날짜를 못 읽으면 등록 폼/여러 제품 확인 화면에서 기한 종류가 `확인불가`로 시작하고 날짜칸이 숨겨짐. `📅 기한 날짜 설정하기` 버튼이나 기한 종류 선택으로 날짜칸이 나타남. `확인불가`를 고르면 날짜칸이 숨겨지고 값이 지워짐.
+- 목록: 기한 없음은 `기한없음` 회색 표시, 맨 뒤 정렬, 만료/임박 통계와 알림에서 제외.
