@@ -98,6 +98,9 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
 .acct{display:flex;justify-content:space-between;gap:10px;align-items:baseline;word-break:break-all}
 .codebox{display:flex;gap:8px;align-items:center}.codebox input{font-weight:700;letter-spacing:.08em}
 .seg{display:flex;gap:8px;flex-wrap:wrap}.seg .chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.bklist{display:grid;gap:8px;max-height:50vh;overflow:auto}
+.bkrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--surface2)}
+.bkrow small{display:block;color:var(--sub)}
 .quick{display:flex;gap:6px;flex-wrap:wrap}
 .quick button{font-size:13px;padding:7px 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface2);cursor:pointer}
 .hint{font-size:12px;color:var(--sub);margin:0}
@@ -189,7 +192,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v24</p>
+  <p class="hint" id="verInfo">v25</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -278,10 +281,20 @@ input.bad{outline:2px solid var(--red)}
   </div>
   <div class="btns"><button class="btn" id="btnExport">📥 엑셀로 내보내기</button><button class="btn" id="btnImport">📤 엑셀에서 가져오기</button><input type="file" id="impFile" accept=".xlsx,.xls,.csv" hidden></div>
   <p class="hint">현재 리스트의 제품을 엑셀(.xlsx) 파일로 저장합니다. 보관 중 제품과 처리된(다 먹음·폐기) 제품이 시트로 나뉩니다. 가져오기는 이 내보내기 양식(제품명·브랜드·카테고리·기한 종류·기한 날짜·수량·메모)의 파일을 읽으며, 이미 같은 제품이 있으면 건너뜁니다.</p>
+  <div class="btns"><button class="btn" id="btnBackup">☁ 지금 백업</button><button class="btn" id="btnRestore">↩ 백업에서 복원</button></div>
+  <p class="hint" id="bkInfo">서버에 목록 사본을 저장합니다. 하루에 한 번 자동으로도 백업되고, 최근 30개를 보관해요.</p>
   <label>알림 기준 (일 전)<input id="notiDays" value="3" type="number" min="0" inputmode="numeric"></label>
   <div class="btns"><button class="btn" id="notiPerm">알림 권한 허용</button><button class="btn pri" id="setSave">저장</button></div>
   <div class="btns"><button class="btn" id="btnLeave">리스트 나가기</button><button class="btn" id="btnLogout">로그아웃</button><button class="btn" id="setClose">닫기</button></div>
   <p class="hint">알림은 현재 앱을 열었을 때 만료 임박 항목을 알려주는 방식입니다. 앱이 꺼져 있을 때의 푸시는 서버 단계에서 추가합니다.</p>
+</div></dialog>
+
+<!-- 백업에서 복원 -->
+<dialog id="dBackup"><div class="sheet">
+  <h2>백업에서 복원</h2>
+  <p class="hint">복원하면 현재 목록이 선택한 백업의 모습으로 바뀝니다. 복원 직전의 목록은 자동으로 한 번 더 백업해 두니, 잘못 골라도 되돌릴 수 있어요.</p>
+  <div id="bkList" class="bklist"></div>
+  <div class="btns"><button class="btn" id="bkClose">닫기</button></div>
 </div></dialog>
 
 <!-- 로그인 / 가입 (로그인 전에는 닫을 수 없음) -->
@@ -862,7 +875,7 @@ async function afterLogin(){
   if (!data || !data.length){ hh = null; store.set('hh', null); initSb(); return showHouse(); }
   hh = data[0]; store.set('hh', hh); initSb();
   if ($('dHouse').open) $('dHouse').close();
-  await sync(); checkAlerts();
+  await sync(); checkAlerts(); autoBackup();
 }
 const hhErr = e => {
   const m = String((e && e.message) || e || '');
@@ -894,7 +907,7 @@ $('btnSet').onclick = () => {
   $('acHh').textContent = hh ? hh.name : '-'; $('acCode').value = hh ? hh.invite_code : '';
   $('acCodeRow').style.display = $('acHhRow').style.display = hh ? '' : 'none';
   $('btnLeave').style.display = hh ? '' : 'none';
-  $('notiDays').value = cfg.notiDays; $('dSet').showModal();
+  $('notiDays').value = cfg.notiDays; $('dSet').showModal(); refreshBkInfo();
 };
 $('setClose').onclick = () => $('dSet').close();
 $('setSave').onclick = () => { cfg = {...cfg, notiDays:Number($('notiDays').value)||0}; store.set('cfg', cfg); $('dSet').close(); toast('저장됨'); };
@@ -982,6 +995,79 @@ $('impFile').onchange = async e => {
     items = [...items, ...r.recs]; save(); syncSoon(); toast(`${r.recs.length}개 제품을 가져왔어요`, 3500);
   }catch(err){ console.error(err); toast('파일을 읽지 못했습니다. 내보내기 한 .xlsx/.csv 파일인지 확인해 주세요.', 4500); }
 };
+/* ---------- 백업 / 복원 (서버 `backups` 테이블, 리스트별) ---------- */
+const BK_KEEP = 30, BK_KIND = {auto:'자동', manual:'수동', 'pre-restore':'복원 전'};
+const bkFmt = iso => { const d = new Date(iso), z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
+const bkMissing = e => e && /relation .*backups|backups.*does not exist|schema cache|PGRST205|42P01/i.test(String(e.message || e.code || e));
+async function makeBackup(kind = 'manual'){
+  if (!sb || !hh) throw new Error('login');
+  if (kind === 'manual') await sync();
+  const snap = items.filter(i => !i.deleted).map(({household, ...r}) => r);
+  const {error} = await sb.from('backups').insert({household:hh.id, kind, item_count:snap.length, data:snap});
+  if (error) throw error;
+  try{   // 오래된 백업 정리 (최근 BK_KEEP개 유지)
+    const {data:old} = await sb.from('backups').select('id').eq('household', hh.id).order('created_at', {ascending:false}).range(BK_KEEP, BK_KEEP + 200);
+    if (old && old.length) await sb.from('backups').delete().in('id', old.map(o => o.id));
+  }catch{}
+  return snap.length;
+}
+async function lastBackupInfo(){
+  if (!sb || !hh) return null;
+  const {data, error} = await sb.from('backups').select('kind,created_at,item_count').eq('household', hh.id).order('created_at', {ascending:false}).limit(1);
+  if (error) return {error};
+  return data && data[0] ? data[0] : null;
+}
+// 하루 1번: 마지막 자동 백업이 20시간 넘었고 앱을 열었을 때 (목록이 비어 있으면 건너뜀)
+async function autoBackup(){
+  try{
+    if (!sb || !hh || !items.some(i => !i.deleted)) return;
+    const {data, error} = await sb.from('backups').select('created_at').eq('household', hh.id).eq('kind', 'auto').order('created_at', {ascending:false}).limit(1);
+    if (error) return;
+    if (data && data[0] && Date.now() - new Date(data[0].created_at).getTime() < 20 * 3600 * 1000) return;
+    await makeBackup('auto');
+  }catch{}
+}
+$('btnBackup').onclick = async () => {
+  if (!sb || !hh) return toast('로그인한 뒤에 백업할 수 있어요');
+  const b = $('btnBackup'); b.disabled = true;
+  try{ const n = await makeBackup('manual'); toast(`백업했어요 (제품 ${n}개)`, 3000); refreshBkInfo(); }
+  catch(e){ toast(bkMissing(e) ? '백업 테이블이 아직 없습니다. supabase/backup.sql을 먼저 실행해 주세요.' : '백업하지 못했습니다: ' + String(e.message || e).slice(0, 80), 4500); }
+  finally{ b.disabled = false; }
+};
+async function refreshBkInfo(){
+  const el = $('bkInfo'); const base = '서버에 목록 사본을 저장합니다. 하루에 한 번 자동으로도 백업되고, 최근 ' + BK_KEEP + '개를 보관해요.';
+  const l = await lastBackupInfo();
+  el.textContent = !l ? base : l.error ? base + ' (백업 테이블이 아직 없어요)' : `마지막 백업: ${bkFmt(l.created_at)} (${BK_KIND[l.kind] || l.kind}, ${l.item_count}개). ` + base;
+}
+$('btnRestore').onclick = async () => {
+  if (!sb || !hh) return toast('로그인한 뒤에 복원할 수 있어요');
+  const box = $('bkList'); box.innerHTML = '<p class="hint">불러오는 중…</p>'; $('dBackup').showModal();
+  const {data, error} = await sb.from('backups').select('id,kind,item_count,created_at').eq('household', hh.id).order('created_at', {ascending:false}).limit(BK_KEEP);
+  if (error){ box.innerHTML = `<p class="hint" style="color:var(--red)">${bkMissing(error) ? '백업 테이블이 아직 없습니다. supabase/backup.sql을 먼저 실행해 주세요.' : '목록을 불러오지 못했습니다.'}</p>`; return; }
+  box.innerHTML = data.length ? data.map(b => `<div class="bkrow"><div><b>${esc(bkFmt(b.created_at))}</b><small>${esc(BK_KIND[b.kind] || b.kind)} · 제품 ${b.item_count}개</small></div><button class="btn sm" data-rs="${esc(b.id)}">복원</button></div>`).join('')
+    : '<p class="hint">아직 백업이 없어요. "지금 백업"을 눌러 만들어 보세요.</p>';
+};
+$('bkClose').onclick = () => $('dBackup').close();
+$('bkList').onclick = async e => {
+  const btn = e.target.closest('[data-rs]'); if (!btn) return;
+  const row = btn.closest('.bkrow'); const label = row.querySelector('b').textContent + ' · ' + row.querySelector('small').textContent;
+  if (!await askConfirm('이 백업으로 복원할까요?', `${label}\n현재 목록이 이 백업의 모습으로 바뀝니다. (복원 직전 목록은 자동 백업됩니다)`, '복원')) return;
+  btn.disabled = true;
+  try{
+    const {data, error} = await sb.from('backups').select('data').eq('id', btn.dataset.rs).single(); if (error) throw error;
+    await restoreFrom(data.data);
+    $('dBackup').close(); $('dSet').close(); toast('복원했어요', 3500);
+  }catch(err){ console.error(err); btn.disabled = false; toast('복원하지 못했습니다: ' + String(err.message || err).slice(0, 80), 4500); }
+};
+async function restoreFrom(snap){
+  if (!Array.isArray(snap)) throw new Error('백업 형식이 올바르지 않습니다');
+  await makeBackup('pre-restore');                                   // 되돌릴 수 있도록 복원 직전 상태를 먼저 저장
+  const now = Date.now(), ids = new Set(snap.map(r => r.id));
+  const restored = snap.map((r, k) => ({...r, deleted:false, updated_at:now + k}));   // 새 시각 → 모든 기기에서 이 상태가 이김
+  const removed = items.filter(i => !ids.has(i.id) && !i.deleted).map(i => ({...i, deleted:true, updated_at:now}));
+  const rest = items.filter(i => !ids.has(i.id) && i.deleted);
+  items = [...restored, ...removed, ...rest]; save(); await sync();
+}
 $('copyCode').onclick = async () => { try{ await navigator.clipboard.writeText($('acCode').value); toast('초대 코드를 복사했어요'); }catch{ $('acCode').select(); toast('코드를 길게 눌러 복사하세요'); } };
 $('btnLogout').onclick = async () => { if (await askConfirm('로그아웃할까요?', '이 기기에 저장된 제품 목록은 지워지고, 다시 로그인하면 서버에서 불러옵니다.', '로그아웃')) { $('dSet').close(); logout(); } };
 $('btnLeave').onclick = async () => {
