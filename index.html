@@ -100,6 +100,14 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
 .thumb{position:relative;aspect-ratio:1;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--surface2)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb button{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:99px;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:16px;line-height:1;cursor:pointer}
+.rv{border:1px solid var(--line);border-radius:18px;padding:14px;display:grid;gap:10px;background:var(--surface2)}
+.rv input,.rv select{background:var(--surface)}
+.rv-head{display:flex;justify-content:space-between;align-items:center}
+.rv-head b{width:26px;height:26px;border-radius:99px;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:13px}
+.rv-del{border:0;background:var(--surface);border-radius:99px;width:30px;height:30px;font-size:18px;line-height:1;cursor:pointer;color:var(--sub)}
+.row3{display:grid;grid-template-columns:minmax(98px,1fr) minmax(128px,1.4fr) 62px;gap:8px}
+.rv input,.rv select{padding:10px 8px}
+.rv-list{display:grid;gap:12px;max-height:58vh;overflow:auto;padding:2px}
 .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#20242c;color:#fff;padding:11px 18px;border-radius:99px;font-size:14px;display:none;z-index:50;max-width:90vw;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 
 /* 태블릿 세로(≥700px): 글자/여백 약간 키움 */
@@ -158,7 +166,7 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v15</p>
+  <p class="hint" id="verInfo">v16</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -166,7 +174,11 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
   <h2>제품 사진 AI 분석</h2>
   <p class="hint">제품 앞면, 기한이 인쇄된 면 등을 <b>최대 5장</b>까지 찍을 수 있어요. 1장만 찍고 바로 분석해도 됩니다.</p>
   <div class="thumbs" id="thumbs"></div>
-  <div class="btns"><label class="btn" id="addPhotoLbl" style="text-align:center;cursor:pointer;color:var(--ink)">📸 사진 찍기<input type="file" id="photoInput" accept="image/*" capture="environment" hidden></label></div>
+  <div class="btns">
+    <label class="btn" id="addPhotoLbl" style="text-align:center;cursor:pointer;color:var(--ink)">📸 사진 찍기<input type="file" id="photoInput" accept="image/*" capture="environment" hidden></label>
+    <label class="btn" id="pickLbl" style="text-align:center;cursor:pointer;color:var(--ink)">🖼 앨범에서 여러 장<input type="file" id="photoPick" accept="image/*" multiple hidden></label>
+  </div>
+  <p class="hint">서로 <b>다른 제품</b>을 함께 찍어도 됩니다. 제품별로 나눠서 각각 등록할 수 있어요. 카메라 앱을 오가다 화면이 새로고침되면, 카메라 앱으로 미리 찍고 "앨범에서 여러 장"으로 한 번에 올리는 방법이 안정적입니다.</p>
   <div class="btns"><button class="btn pri" id="doAnalyze" disabled>🤖 분석하기</button><button class="btn" id="photosClose">닫기</button></div>
   <p class="hint">사진에는 포장만 나오게 찍어 주세요. 사진은 AI 분석에만 쓰이고 저장되지 않습니다.</p>
 </div></dialog>
@@ -194,6 +206,14 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
     <button type="button" class="btn" id="fCancel">취소</button>
   </div>
 </form></dialog>
+
+<!-- 여러 제품 확인 후 한꺼번에 등록 -->
+<dialog id="dReview"><div class="sheet">
+  <h2 id="rvTitle">인식된 제품</h2>
+  <p class="hint" style="color:var(--org)">🤖 AI가 읽은 값입니다. 제품명과 <b>기한 날짜는 포장과 꼭 대조</b>하세요. 빈 칸은 직접 입력해 주세요.</p>
+  <div class="rv-list" id="rvList"></div>
+  <div class="btns"><button class="btn pri" id="rvSave">모두 등록</button><button class="btn" id="rvCancel">취소</button></div>
+</div></dialog>
 
 <!-- 확인 (브라우저 기본 confirm 대신 앱 안에서 표시) -->
 <dialog id="dConfirm"><div class="sheet">
@@ -319,7 +339,8 @@ function openForm(item, pre = {}){
   $('aiNote').style.display = 'none';
   $('dForm').showModal();
 }
-$('fCancel').onclick = () => $('dForm').close();
+const clearFormDraft = () => store.set('draft', null);
+$('fCancel').onclick = () => { clearFormDraft(); $('dForm').close(); };
 $('form').onsubmit = e => {
   e.preventDefault();
   const rec = {
@@ -329,9 +350,9 @@ $('form').onsubmit = e => {
   };
   if (!rec.name || !rec.expiry) return;
   items = editing ? items.map(i => i.id === rec.id ? rec : i) : [...items, rec];
-  $('dForm').close(); save(); toast('저장됨'); syncSoon();
+  clearFormDraft(); $('dForm').close(); save(); toast('저장됨'); syncSoon();
 };
-function setStatus(s){ if (!editing) return; items = items.map(i => i.id === editing.id ? {...i, status:s, updated_at:Date.now()} : i); $('dForm').close(); save(); syncSoon(); }
+function setStatus(s){ if (!editing) return; items = items.map(i => i.id === editing.id ? {...i, status:s, updated_at:Date.now()} : i); clearFormDraft(); $('dForm').close(); save(); syncSoon(); }
 $('fDone').onclick = () => setStatus('done');
 $('fDiscard').onclick = () => setStatus('discarded');
 
@@ -365,24 +386,57 @@ $('addClose').onclick = () => $('dAdd').close();
 $('addManual').onclick = () => { $('dAdd').close(); openForm(null, {}); };
 $('addAi').onclick = () => {
   $('dAdd').close(); photos = []; renderThumbs(); $('dPhotos').showModal();
-  try{ $('photoInput').click(); }catch{}          // 바로 카메라가 열리도록 (취소해도 "사진 찍기"로 다시 가능)
+  markCamPending(); try{ $('photoInput').click(); }catch{}          // 바로 카메라가 열리도록 (취소해도 "사진 찍기"로 다시 가능)
 };
-$('photosClose').onclick = () => $('dPhotos').close();
-$('dPhotos').addEventListener('close', () => { photos = []; });
+const clearPhotoDraft = () => { photos = []; try{ localStorage.removeItem('photoDraft'); }catch{} };
+$('photosClose').onclick = () => { clearPhotoDraft(); $('dPhotos').close(); };
+$('dPhotos').addEventListener('close', () => { photos = []; try{ localStorage.removeItem('photoDraft'); }catch{} });
+// 카메라 앱에 다녀오다 폰이 페이지를 다시 불러와도 찍어 둔 사진이 남도록 임시 저장
+function persistPhotos(){
+  try{ photos.length ? localStorage.setItem('photoDraft', JSON.stringify(photos)) : localStorage.removeItem('photoDraft'); }catch{ /* 저장 공간 부족 시 무시 */ }
+}
+const markCamPending = () => { try{ sessionStorage.setItem('camPending', '1'); }catch{} };
+const clearCamPending = () => { try{ sessionStorage.removeItem('camPending'); }catch{} };
+$('addPhotoLbl').addEventListener('click', markCamPending);
+function restorePhotos(){
+  let d = null; try{ d = JSON.parse(localStorage.getItem('photoDraft') || 'null'); }catch{}
+  let pending = false; try{ pending = sessionStorage.getItem('camPending') === '1'; }catch{}
+  clearCamPending();
+  if (Array.isArray(d) && d.length){
+    photos = d.slice(0, MAX_PHOTOS); renderThumbs(); if (!$('dPhotos').open) $('dPhotos').showModal();
+    toast(pending ? `카메라에서 돌아오며 앱이 새로고침되어 마지막 사진이 빠졌을 수 있어요. 찍어 둔 ${photos.length}장은 복원했습니다.` : `찍어 둔 사진 ${photos.length}장을 복원했습니다.`, 6500);
+  } else if (pending){
+    toast('카메라에서 돌아오며 앱이 새로고침되어 사진이 저장되지 않았어요. 카메라 앱으로 먼저 찍고 "앨범에서 여러 장"으로 올려 보세요.', 7000);
+  }
+}
 
 function renderThumbs(){
   $('thumbs').innerHTML = photos.map((u, i) => `<div class="thumb"><img src="${u}" alt="사진 ${i+1}"><button type="button" data-i="${i}" aria-label="삭제">×</button></div>`).join('');
   const full = photos.length >= MAX_PHOTOS;
   $('addPhotoLbl').style.opacity = full ? .45 : 1; $('photoInput').disabled = full;
   $('addPhotoLbl').firstChild.textContent = photos.length ? `📸 사진 추가 (${photos.length}/${MAX_PHOTOS})` : '📸 사진 찍기';
+  $('pickLbl').style.opacity = full ? .45 : 1; $('photoPick').disabled = full;
+  persistPhotos();
   $('doAnalyze').disabled = !photos.length;
   $('doAnalyze').textContent = photos.length ? `🤖 ${photos.length}장 분석하기` : '🤖 분석하기';
 }
 $('thumbs').onclick = e => { const b = e.target.closest('button[data-i]'); if (b){ photos.splice(Number(b.dataset.i), 1); renderThumbs(); } };
 $('photoInput').onchange = async e => {
-  const f = e.target.files[0]; e.target.value = ''; if (!f || photos.length >= MAX_PHOTOS) return;
+  const f = e.target.files[0]; e.target.value = ''; clearCamPending();
+  if (!f || photos.length >= MAX_PHOTOS) return;
   try{ photos.push(await photoToDataUrl(await createImageBitmap(f))); renderThumbs(); }
   catch{ toast('사진을 불러오지 못했습니다. 다시 찍어 주세요.'); }
+};
+// 앨범에서 여러 장을 한 번에 (카메라 앱으로 미리 찍어 둔 사진)
+$('photoPick').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  let skipped = 0;
+  for (const f of files){
+    if (photos.length >= MAX_PHOTOS){ skipped++; continue; }
+    try{ photos.push(await photoToDataUrl(await createImageBitmap(f))); }catch{ skipped++; }
+  }
+  renderThumbs();
+  if (skipped) toast(`최대 ${MAX_PHOTOS}장까지만 올릴 수 있어요. ${skipped}장은 제외했습니다.`, 3500);
 };
 
 async function photoToDataUrl(bmp, max = 1024, q = .8){
@@ -409,17 +463,66 @@ $('doAnalyze').onclick = async () => {
   const btn = $('doAnalyze'); btn.disabled = true; btn.textContent = '🤖 분석 중… (최대 1~2분)';
   toast('🤖 AI가 사진을 분석 중입니다', 100000);
   try{
-    const { data: ai } = await callAnalyze(photos.slice());
-    $('dPhotos').close();
-    openForm(null, {name: ai.name || '', brand: ai.brand || '', category: ai.category || '기타',
-      exp_type: ai.exp_type || '소비기한', expiry: ai.expiry || ''});
-    $('aiNote').style.display = '';
-    if (ai.expiry){ $('fExp').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExp').style.outline = '', 6000); }
-    toast(ai.confidence === 'low' ? '자동 입력됨 — 확신도 낮음, 꼭 확인하세요' : '자동 입력됨 — 확인/수정하세요', 4000);
+    const res = await callAnalyze(photos.slice());
+    const list = (Array.isArray(res.items) && res.items.length) ? res.items : [res.data];
+    clearPhotoDraft(); $('dPhotos').close();
+    if (list.length > 1){
+      openReview(list);
+      toast(`제품 ${list.length}개를 인식했어요 — 확인/수정 후 등록하세요`, 4500);
+    } else {
+      const ai = list[0];
+      openForm(null, {name: ai.name || '', brand: ai.brand || '', category: ai.category || '기타',
+        exp_type: ai.exp_type || '소비기한', expiry: ai.expiry || ''});
+      $('aiNote').style.display = '';
+      if (ai.expiry){ $('fExp').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExp').style.outline = '', 6000); }
+      toast(ai.confidence === 'low' ? '자동 입력됨 — 확신도 낮음, 꼭 확인하세요' : '자동 입력됨 — 확인/수정하세요', 4000);
+    }
   }catch(e){
     renderThumbs();
     toast(e.message === 'token' ? 'AI 토큰이 올바르지 않습니다. ⚙ 설정을 확인하세요.' : 'AI 분석에 실패했습니다. (무료 모델 한도 초과일 수 있어요) 다시 시도하거나 수동 등록을 이용하세요.', 5000);
   }
+};
+
+
+/* ---------- 여러 제품 확인 → 모두 등록 ---------- */
+let reviewItems = [];
+function openReview(list){
+  reviewItems = list.map(x => ({name:x.name||'', brand:x.brand||'', category:CATS.includes(x.category)?x.category:'기타',
+    exp_type:x.exp_type||'소비기한', expiry:x.expiry||'', qty:1}));
+  renderReview(); $('dReview').showModal();
+}
+function renderReview(){
+  $('rvTitle').textContent = `인식된 제품 ${reviewItems.length}개`;
+  $('rvList').innerHTML = reviewItems.map((it, i) => `<div class="rv" data-i="${i}">
+    <div class="rv-head"><b>${i+1}</b><button type="button" class="rv-del" data-del="${i}" aria-label="이 제품 빼기">×</button></div>
+    <label>제품명<input data-f="name" value="${esc(it.name)}"></label>
+    <div class="row"><label>브랜드<input data-f="brand" value="${esc(it.brand)}"></label>
+      <label>카테고리<select data-f="category">${CATS.map(c => `<option ${c===it.category?'selected':''}>${c}</option>`).join('')}</select></label></div>
+    <div class="row3"><label>기한 종류<select data-f="exp_type">${['소비기한','유통기한'].map(t => `<option ${t===it.exp_type?'selected':''}>${t}</option>`).join('')}</select></label>
+      <label>기한 날짜<input type="date" data-f="expiry" value="${esc(it.expiry)}"></label>
+      <label>수량<input type="number" min="1" data-f="qty" value="${esc(it.qty)}" inputmode="numeric"></label></div>
+  </div>`).join('');
+}
+const rvEdit = e => { const box = e.target.closest('.rv'); if (box && e.target.dataset.f) reviewItems[Number(box.dataset.i)][e.target.dataset.f] = e.target.value; };
+$('rvList').addEventListener('input', rvEdit);
+$('rvList').addEventListener('change', rvEdit);
+$('rvList').onclick = e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  reviewItems.splice(Number(b.dataset.del), 1);
+  if (!reviewItems.length) $('dReview').close(); else renderReview();
+};
+$('rvCancel').onclick = () => $('dReview').close();
+$('rvSave').onclick = () => {
+  const bad = reviewItems.findIndex(it => !it.name.trim() || !it.expiry);
+  if (bad >= 0){
+    toast(`${bad+1}번 제품의 제품명과 기한 날짜를 입력해 주세요`, 3500);
+    const box = $('rvList').children[bad]; box.scrollIntoView({block:'center'}); box.style.outline = '2px solid var(--org)'; setTimeout(() => box.style.outline = '', 3000);
+    return;
+  }
+  const now = Date.now();
+  const recs = reviewItems.map((it, k) => ({id:uid(), name:it.name.trim(), brand:it.brand.trim(), category:it.category,
+    exp_type:it.exp_type, expiry:it.expiry, qty:Number(it.qty)||1, barcode:null, memo:'', status:'active', deleted:false, updated_at:now+k}));
+  items = [...items, ...recs]; $('dReview').close(); save(); syncSoon(); toast(`${recs.length}개 제품을 등록했습니다`);
 };
 
 /* ---------- 동기화 (Supabase) ---------- */
@@ -474,7 +577,7 @@ function checkAlerts(){
 
 /* ---------- 시작 ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-initSb(); render(); restoreDraft(); sync().then(checkAlerts);
+initSb(); render(); restoreDraft(); restorePhotos(); sync().then(checkAlerts);
 document.addEventListener('visibilitychange', () => { if (!document.hidden){ render(); sync(); } });
 </script>
 </body>
