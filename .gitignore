@@ -1,2 +1,6 @@
 .claude/
 .mcp.json
+node_modules/
+android/
+ios/
+www/

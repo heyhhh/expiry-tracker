@@ -195,7 +195,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v29</p>
+  <p class="hint" id="verInfo">v30</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -342,8 +342,8 @@ input.bad{outline:2px solid var(--red)}
   <div class="btns"><button class="btn" id="hhOut">로그아웃</button></div>
 </div></dialog>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="vendor/supabase.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const CATS = ['유제품','육류','수산물','채소/과일','음료','과자/간식','냉동식품','가공식품','소스/양념','의약품','건강기능식품','화장품','생활용품','기타'];
@@ -355,6 +355,9 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
 };
+// 앱(Capacitor)으로 실행 중인지: 앱이면 네이티브 알림/파일 공유를 사용
+const NATIVE = !!(window.Capacitor && typeof Capacitor.isNativePlatform === 'function' && Capacitor.isNativePlatform());
+const nativePlugin = n => (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins[n]) || null;
 let items = store.get('items', []);
 // URL과 publishable 키는 공개 전제의 값이라 기본값으로 내장 (비밀은 공유 코드뿐)
 const DEFAULTS = {sbUrl:'https://nnrzjgsjwgykafawtimt.supabase.co', sbKey:'sb_publishable_vfmo-2H6jIbNlx6FCezYkw_5ohw1y0n', notiDays:3};
@@ -427,7 +430,7 @@ async function flushLogs(){
 window.addEventListener('error', e => { if (++jsErrCount <= 20) logEvent('js_error', {msg:String(e.message || '').slice(0, 160), src:String(e.filename || '').split('/').pop(), line:e.lineno}, 'error'); });
 window.addEventListener('unhandledrejection', e => { if (++jsErrCount <= 20) logEvent('js_error', {msg:String((e.reason && e.reason.message) || e.reason || '').slice(0, 160), kind:'promise'}, 'error'); });
 
-function save(){ store.set('items', items); render(); }
+function save(){ store.set('items', items); render(); schedSoon(); }
 function tone(d){ return d <= 1 ? 't-red' : d <= 3 ? 't-org' : d <= 7 ? 't-yel' : 't-grn'; }
 function label(d){ return d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`; }
 
@@ -872,7 +875,7 @@ async function sync(manual){
     for (const [id, r] of remote){ const l = local.get(id); if (!l || r.updated_at > l.updated_at){ const {household, ...rest} = r; local.set(id, rest); } }
     if (push.length){ const {error:e2} = await sb.from('items').upsert(push); if (e2) throw e2; }
     items = [...local.values()]; store.set('items', items); render();
-    await archiveClosed(); flushLogs();
+    await archiveClosed(); flushLogs(); schedSoon();
     if (manual) toast('동기화 완료');
   }catch(err){ console.error(err); logEvent('sync_error', {msg:String((err && err.message) || err).slice(0, 160)}, 'error'); toast('동기화 실패: 네트워크를 확인하세요'); }
 }
@@ -965,7 +968,7 @@ $('btnSet').onclick = () => {
   $('notiDays').value = cfg.notiDays; $('dSet').showModal(); refreshBkInfo();
 };
 $('setClose').onclick = $('setX').onclick = () => $('dSet').close();
-$('setSave').onclick = () => { cfg = {...cfg, notiDays:Number($('notiDays').value)||0}; store.set('cfg', cfg); $('dSet').close(); toast('저장됨'); };
+$('setSave').onclick = () => { cfg = {...cfg, notiDays:Number($('notiDays').value)||0}; store.set('cfg', cfg); $('dSet').close(); toast('저장됨'); schedSoon(); };
 /* ---------- 처리 기록 (수량 0 → 서버 `item_history`로 이전, 메인 목록에서는 숨김) ---------- */
 const HIST_REASON = {done:'consumed', discarded:'discarded'}, HIST_LABEL = {consumed:'다 먹음', discarded:'폐기'};
 let histWarned = false;
@@ -1039,6 +1042,14 @@ function exportRows(list){
       '남은 일수':has ? dday(i.expiry) : '', '수량':Number(i.qty)||1, '메모':i.memo||''};
   });
 }
+async function saveWorkbook(wb, fname){
+  const FS = nativePlugin('Filesystem'), SH = nativePlugin('Share');
+  if (NATIVE && FS && SH){   // 앱: 캐시에 저장한 뒤 공유 시트(파일에 저장/드라이브/메신저 등)
+    const b64 = XLSX.write(wb, {type:'base64', bookType:'xlsx'});
+    const r = await FS.writeFile({path:fname, data:b64, directory:'CACHE'});
+    await SH.share({title:fname, url:r.uri, dialogTitle:'엑셀 파일 저장/공유'});
+  } else XLSX.writeFile(wb, fname);
+}
 async function exportXlsx(){
   const live = items.filter(i => !i.deleted);
   if (!live.length) return toast('내보낼 제품이 없습니다');
@@ -1057,7 +1068,7 @@ async function exportXlsx(){
       const rows = closed.map(i => ({...exportRows([i])[0], '처리':i.status === 'done' ? '다 먹음' : '폐기', ...(i._ended ? {'처리일':bkFmt(i._ended)} : {})}));
       const ws2 = XLSX.utils.json_to_sheet(rows); ws2['!cols'] = [...cols, {wch:8}]; XLSX.utils.book_append_sheet(wb, ws2, '처리됨');
     }
-    XLSX.writeFile(wb, name + '.xlsx'); logEvent('export_excel', {count:active.length + closed.length});
+    await saveWorkbook(wb, name + '.xlsx'); logEvent('export_excel', {count:active.length + closed.length});
     return toast('엑셀 파일을 저장했어요', 3000);
   }
   // 엑셀 라이브러리를 못 불러온 경우: CSV(엑셀에서 열림, 한글 깨짐 방지 BOM)
@@ -1201,11 +1212,39 @@ $('btnLeave').onclick = async () => {
   const {error} = await sb.rpc('leave_household'); if (error) return toast('처리하지 못했습니다: ' + String(error.message).slice(0, 80), 4000);
   hh = null; store.set('hh', null); resetLocal(); initSb(); $('dSet').close(); showHouse();
 };
+/* ---------- 앱 알림 (제품별 기한 알림을 기기에 예약: 앱이 꺼져 있어도 울림) ---------- */
+let schedTimer; const schedSoon = () => { if (!NATIVE) return; clearTimeout(schedTimer); schedTimer = setTimeout(scheduleNative, 3000); };
+async function scheduleNative(){
+  try{
+    const LN = nativePlugin('LocalNotifications'); if (!LN) return;
+    const perm = await LN.checkPermissions(); if (perm.display !== 'granted') return;
+    const pend = await LN.getPending();
+    if (pend.notifications.length) await LN.cancel({notifications: pend.notifications.map(n => ({id:n.id}))});
+    const days = Number(cfg.notiDays) || 0, now = Date.now(), list = [];
+    for (const i of items){
+      if (i.deleted || i.status !== 'active' || !hasExp(i)) continue;
+      const exp = new Date(i.expiry + 'T09:00:00'), pre = new Date(exp); pre.setDate(pre.getDate() - days);
+      if (days > 0 && pre.getTime() > now) list.push({at:pre, title:`기한 임박: ${i.name}`, body:`${days}일 뒤 ${i.exp_type || '기한'}이 끝나요 (${i.expiry})`});
+      if (exp.getTime() > now) list.push({at:exp, title:`오늘까지: ${i.name}`, body:`${i.exp_type || '기한'}이 오늘이에요`});
+    }
+    list.sort((a, b) => a.at - b.at);
+    const notifs = list.slice(0, 60).map((n, k) => ({id:k + 1, title:n.title, body:n.body, schedule:{at:n.at, allowWhileIdle:true}}));   // iOS는 예약 64개 제한
+    if (notifs.length) await LN.schedule({notifications: notifs});
+  }catch(e){ logEvent('notify_error', {msg:String((e && e.message) || e).slice(0, 120)}, 'error'); }
+}
 $('notiPerm').onclick = async () => {
+  if (NATIVE){
+    try{ const LN = nativePlugin('LocalNotifications'); const r = await LN.requestPermissions();
+      toast(r.display === 'granted' ? '알림 허용됨 — 기한 알림을 예약했어요' : '알림이 거부되었습니다 (폰 설정에서 허용해 주세요)', 3500);
+      if (r.display === 'granted') scheduleNative();
+    }catch{ toast('알림 권한을 요청하지 못했습니다'); }
+    return;
+  }
   if (!('Notification' in window)) return toast('이 브라우저는 알림을 지원하지 않습니다. (아이폰은 홈 화면에 추가 후 사용)');
   const p = await Notification.requestPermission(); toast(p === 'granted' ? '알림 허용됨' : '알림이 거부되었습니다');
 };
 function checkAlerts(){
+  if (NATIVE){ schedSoon(); return; }
   const soon = items.filter(i => !i.deleted && i.status === 'active' && hasExp(i) && dday(i.expiry) <= cfg.notiDays).sort((a,b)=>a.expiry.localeCompare(b.expiry));
   if (!soon.length) return;
   const key = 'alerted-' + fmt(today()); if (store.get(key, false)) return;

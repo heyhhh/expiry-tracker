@@ -1,0 +1,20 @@
+{
+  "name": "expiry-keeper-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "유통기한 지킴이 — 웹(PWA)을 Capacitor로 감싼 Android/iOS 앱 빌드 설정",
+  "scripts": {
+    "build:www": "node scripts/build-www.js"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/filesystem": "^6.0.2",
+    "@capacitor/local-notifications": "^6.1.0",
+    "@capacitor/share": "^6.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.2.0"
+  }
+}

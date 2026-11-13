@@ -1,0 +1,6 @@
+{
+  "appId": "io.github.heyhhh.expirykeeper",
+  "appName": "유통기한 지킴이",
+  "webDir": "www",
+  "server": { "androidScheme": "https" }
+}
