@@ -9,7 +9,7 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 const CATS = ['유제품', '육류', '수산물', '채소/과일', '음료', '과자/간식', '냉동식품', '가공식품', '소스/양념', '기타'];
-const DEFAULT_MODELS = 'google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3.5-super-vl:free';
+const DEFAULT_MODELS = 'google/gemma-4-31b-it:free,particle-ai/particle-1:free,google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3.5-super-vl:free';
 const MAX_IMAGE_CHARS = 1_800_000; // data URL 길이 상한 (약 1.3MB)
 
 const PROMPT = `당신은 한국 식품 포장 사진을 읽는 도우미입니다. 사진에 실제로 인쇄된 글자만 근거로 아래 JSON 하나만 출력하세요. 설명이나 코드블록은 쓰지 마세요.
@@ -85,7 +85,8 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             model,
             temperature: 0,
-            max_tokens: 900,
+            max_tokens: 2500,
+            reasoning: { effort: 'low' }, // 추론형 모델이 토큰을 생각에 다 쓰지 않도록 (미지원 모델은 무시)
             response_format: { type: 'json_object' },
             messages: [{
               role: 'user',
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
         const text = j?.choices?.[0]?.message?.content;
         const str = typeof text === 'string' ? text : JSON.stringify(text ?? '');
         const data = clean(parse(str));
-        if (!data || !data.name) {
+        if (!data || !(data.name || data.brand || data.barcode || data.expiry)) {
           const fin = j?.choices?.[0]?.finish_reason;
           tried.push({ model, status: `unparsable${fin ? ' (' + fin + ')' : ''}`, ...(debug ? { raw: str.slice(0, 300) } : {}) });
           break;
