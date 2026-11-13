@@ -90,7 +90,13 @@ Deno.serve(async (req) => {
         }),
       });
       clearTimeout(t);
-      if (!r.ok) { tried.push({ model, status: `http ${r.status}` }); continue; }
+      if (!r.ok) {
+        // OpenRouter의 오류 사유(예: "User not found", "No endpoints found")만 짧게 전달. 요청 헤더/키는 포함되지 않음.
+        let why = '';
+        try { const e = await r.json(); why = String(e?.error?.message ?? '').slice(0, 140); } catch { /* ignore */ }
+        tried.push({ model, status: `http ${r.status}${why ? ': ' + why : ''}` });
+        continue;
+      }
       const j = await r.json();
       const text = j?.choices?.[0]?.message?.content;
       const data = clean(parse(typeof text === 'string' ? text : JSON.stringify(text ?? '')));
