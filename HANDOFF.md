@@ -321,3 +321,7 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 
 ## 30. v31: 사진 최대 10장
 - 앱 `MAX_PHOTOS` 5→10, analyze `images.slice(0,10)`, 한 번에 인식하는 제품 수 상한 10개(analyze v21). 사진은 클라이언트에서 1024px/품질 0.8로 줄여 전송(10장 ≈ 2MB). 무료 모델은 사진이 많을수록 느려지고(최대 1~2분) 정확도가 떨어질 수 있음. APK는 새로 빌드해야 반영됨.
+
+## 31. v32: 앱에서는 사진 분석 시 카메라 자동 실행 안 함
+- 웹은 `제품 사진으로 AI 분석`을 누르면 바로 카메라가 열리지만(`NATIVE` 아님), 앱(Capacitor)에서는 사진 모으기 화면을 먼저 보여주고 `사진 찍기`/`앨범에서 여러 장`을 직접 선택하게 함. `analyze_ok` 로그에 사용된 모델명 포함.
+- 모델 우선순위(`analyze` DEFAULT_MODELS, 시크릿 `AI_MODELS`가 있으면 그것이 우선): gemma-4-31b → particle-1 → gemma-4-26b → nemotron-3.5-super-vl. OpenRouter 무료 비전 모델 중 inkling-2-small, dots-3-note-preview, nemotron-3-nano-omni 등은 미시험.

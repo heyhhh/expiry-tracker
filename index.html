@@ -195,7 +195,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v31</p>
+  <p class="hint" id="verInfo">v32</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 10장) -->
@@ -669,7 +669,7 @@ $('addClose').onclick = () => $('dAdd').close();
 $('addManual').onclick = () => { $('dAdd').close(); openForm(null, {}); };
 $('addAi').onclick = () => {
   $('dAdd').close(); photos = []; renderThumbs(); $('dPhotos').showModal();
-  markCamPending(); try{ $('photoInput').click(); }catch{}          // 바로 카메라가 열리도록 (취소해도 "사진 찍기"로 다시 가능)
+  if (!NATIVE){ markCamPending(); try{ $('photoInput').click(); }catch{} }   // 웹: 바로 카메라가 열리도록 (취소해도 "사진 찍기"로 다시 가능). 앱: 사진 모으기 화면에서 직접 선택
 };
 const clearPhotoDraft = () => { photos = []; clearCamPending(); try{ localStorage.removeItem('photoDraft'); }catch{} };
 $('photosClose').onclick = () => { clearPhotoDraft(); $('dPhotos').close(); };
@@ -749,7 +749,7 @@ $('doAnalyze').onclick = async () => {
   try{
     const src = photos.slice();
     const res = await callAnalyze(src);
-    logEvent('analyze_ok', {photos:src.length, found:(res.items || []).length});
+    logEvent('analyze_ok', {photos:src.length, found:(res.items || []).length, model:String(res.model || '').split('/').pop()});
     const list = (Array.isArray(res.items) && res.items.length) ? res.items : [res.data];
     clearPhotoDraft(); $('dPhotos').close();
     if (list.length > 1){
@@ -1014,7 +1014,7 @@ function logSummary(l){
   if (d.count !== undefined && !d.names) p.push(d.count + '개');
   if (d.added !== undefined) p.push(`추가 ${d.added}, 건너뜀 ${d.skipped}, 제외 ${d.bad}`);
   if (d.restored !== undefined) p.push(`복원 ${d.restored}, 제외 ${d.removed}`);
-  if (d.photos !== undefined) p.push(`사진 ${d.photos}장 → ${d.found}개`);
+  if (d.photos !== undefined) p.push(`사진 ${d.photos}장 → ${d.found}개${d.model ? ' (' + d.model + ')' : ''}`);
   if (d.msg) p.push(d.msg + (d.line ? ` (${d.src}:${d.line})` : ''));
   return p.join(' · ');
 }
