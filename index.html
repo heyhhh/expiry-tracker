@@ -45,7 +45,11 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
 .btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
 .btn.dng{color:var(--red)}
 .quick{display:flex;gap:6px;flex-wrap:wrap}.quick button{font-size:13px;padding:6px 10px;border-radius:99px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
-#cam{width:100%;max-height:48vh;border-radius:12px;background:#000;object-fit:cover}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+.thumb{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--bg)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb button{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:99px;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:16px;line-height:1;cursor:pointer}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
 .hint{font-size:12px;color:var(--sub)}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;display:none;z-index:20}
 </style>
@@ -65,17 +69,23 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
 <button class="fab" id="btnAdd">＋ 제품 추가</button>
 <div class="toast" id="toast"></div>
 
-<!-- 스캔 -->
-<dialog id="dScan"><div class="sheet">
-  <h2>바코드 스캔</h2>
-  <video id="cam" playsinline muted autoplay></video>
-  <p class="hint">제품 뒷면 바코드를 화면 중앙에 맞춰주세요. (HTTPS 필요)</p>
-  <div class="btns"><label class="btn pri" style="text-align:center;cursor:pointer;flex-basis:100%">📸 제품 사진으로 AI 분석<input type="file" id="aiFile" accept="image/*" capture="environment" hidden></label></div>
-  <div class="btns"><button type="button" class="btn" id="lensBtn">🔄 렌즈 전환</button><label class="btn" style="text-align:center;cursor:pointer">📷 사진으로 인식<input type="file" id="scanFile" accept="image/*" capture="environment" hidden></label></div>
-  <p class="hint">실시간 초점이 안 맞으면 "사진으로 인식"을 눌러 기본 카메라로 바코드를 찍어주세요. 바코드에서 15~20cm 떨어지면 초점이 잘 맞습니다.</p>
-  <p class="hint" id="camInfo">v12</p>
-  <label>직접 입력<input id="manualCode" inputmode="numeric" placeholder="바코드 숫자"></label>
-  <div class="btns"><button class="btn" id="scanManual">조회</button><button class="btn" id="scanSkip">바코드 없이 등록</button><button class="btn" id="scanClose">닫기</button></div>
+<!-- 제품 추가 방법 선택 -->
+<dialog id="dAdd"><div class="sheet">
+  <h2>제품 추가</h2>
+  <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
+  <button class="btn" id="addManual">✍️ 수동 등록</button>
+  <button class="btn" id="addClose">닫기</button>
+  <p class="hint" id="verInfo">v13</p>
+</div></dialog>
+
+<!-- 사진 모으기 (최대 5장) -->
+<dialog id="dPhotos"><div class="sheet">
+  <h2>제품 사진 AI 분석</h2>
+  <p class="hint">제품 앞면, 기한이 인쇄된 면 등을 <b>최대 5장</b>까지 찍을 수 있어요. 1장만 찍고 바로 분석해도 됩니다.</p>
+  <div class="thumbs" id="thumbs"></div>
+  <div class="btns"><label class="btn" id="addPhotoLbl" style="text-align:center;cursor:pointer">📸 사진 찍기<input type="file" id="photoInput" accept="image/*" capture="environment" hidden></label></div>
+  <div class="btns"><button class="btn pri" id="doAnalyze" disabled>🤖 분석하기</button><button class="btn" id="photosClose">닫기</button></div>
+  <p class="hint">사진에는 포장만 나오게 찍어 주세요. 사진은 AI 분석에만 쓰이고 저장되지 않습니다.</p>
 </div></dialog>
 
 <!-- 등록/수정 -->
@@ -92,16 +102,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   </div>
   <p class="hint" id="aiNote" style="display:none;color:var(--org)">🤖 AI가 읽은 값입니다. 특히 <b>기한 날짜는 포장과 꼭 대조</b>하세요.</p>
   <div class="quick" id="quick"></div>
-  <div class="row">
-    <label>수량<input type="number" id="fQty" min="1" value="1"></label>
-    <label>바코드<input id="fCode" inputmode="numeric"></label>
-  </div>
-  <div class="btns">
-    <a class="btn" id="fSearch" target="_blank" rel="noopener" style="text-align:center;text-decoration:none">🔍 코리안넷에서 검색</a>
-    <button type="button" class="btn" id="fPaste">📋 붙여넣기 → 제품명</button>
-    <label class="btn" style="text-align:center;cursor:pointer">📸 날짜면 AI 읽기<input type="file" id="aiFile2" accept="image/*" capture="environment" hidden></label>
-  </div>
-  <p class="hint">검색 결과에서 제품명을 복사해 온 뒤 "붙여넣기"를 누르고 저장하면, 같은 바코드는 다음부터 자동으로 채워집니다.</p>
+  <label>수량<input type="number" id="fQty" min="1" value="1"></label>
   <label>메모<input id="fMemo" placeholder="냉장/냉동, 개봉일 등"></label>
   <div class="btns">
     <button type="submit" class="btn pri" id="fSave">저장</button>
@@ -167,188 +168,11 @@ function render(){
     return `<div class="card" data-id="${esc(i.id)}"><div class="dd" style="background:${color(d)}">${label(d)}<small>${esc(i.expiry.slice(5))}</small></div>
     <div class="info"><div class="n">${esc(i.name)}</div><div class="m">${esc(i.category||'')}${i.brand?' · '+esc(i.brand):''} · ${esc(i.exp_type||'')}${i.memo?' · '+esc(i.memo):''}</div></div>
     <div class="qty">×${esc(i.qty)}</div></div>`; }).join('')
-    : `<div class="empty">등록된 제품이 없습니다.<br>＋ 버튼으로 바코드를 스캔해 보세요.</div>`;
+    : `<div class="empty">등록된 제품이 없습니다.<br>＋ 버튼으로 제품 사진을 찍어 등록해 보세요.</div>`;
 }
 $('chips').onclick = e => { const c = e.target.dataset.c; if (c){ filter = c; render(); } };
 $('list').onclick = e => { const el = e.target.closest('.card'); if (el) openForm(items.find(i => i.id === el.dataset.id)); };
 
-
-/* ---------- 영문/로마자 → 한글 ---------- */
-const BRANDS = {'ottogi':'오뚜기','ottugi':'오뚜기','nongshim':'농심','samyang':'삼양','paldo':'팔도','lotte':'롯데','orion':'오리온','haitai':'해태','crown':'크라운','binggrae':'빙그레','maeil':'매일','seoul milk':'서울우유','cj':'CJ','cj cheiljedang':'CJ제일제당','daesang':'대상','sempio':'샘표','pulmuone':'풀무원','dongwon':'동원','sajo':'사조','haechandle':'해찬들','chungjungone':'청정원','nestle':'네슬레','coca-cola':'코카콜라','pepsi':'펩시','lotte chilsung':'롯데칠성','gwangdong':'광동','dongsuh':'동서','namyang':'남양','ildong':'일동','hite jinro':'하이트진로','jinro':'진로','yakult':'야쿠르트','korea yakult':'한국야쿠르트','bibigo':'비비고'};
-const WORDS = {'jin':'진','shin':'신','ramyun':'라면','ramyeon':'라면','ramen':'라면','bibim':'비빔','bibimmyeon':'비빔면','myeon':'면','myun':'면','jjajang':'짜장','jjajangmyeon':'짜장면','jjamppong':'짬뽕','kimchi':'김치','cup':'컵','spicy':'매운','hot':'핫','original':'오리지널','milk':'우유','yogurt':'요거트','yoghurt':'요거트','cheese':'치즈','chocolate':'초콜릿','cookie':'쿠키','cookies':'쿠키','snack':'스낵','chicken':'치킨','beef':'소고기','pork':'돼지고기','tuna':'참치','tofu':'두부','rice':'쌀','sauce':'소스','noodle':'면','noodles':'면','soup':'국','kimbap':'김밥','mandu':'만두','dumpling':'만두','dumplings':'만두','gochujang':'고추장','doenjang':'된장','ganjang':'간장','ddeokbokki':'떡볶이','tteokbokki':'떡볶이','seaweed':'김','laver':'김','gim':'김','coffee':'커피','tea':'차','juice':'주스','water':'물','sweet':'달콤한','cream':'크림','butter':'버터','egg':'계란','eggs':'계란','bread':'빵','cake':'케이크','jelly':'젤리','candy':'사탕','potato':'감자','corn':'옥수수','apple':'사과','orange':'오렌지','grape':'포도','strawberry':'딸기','banana':'바나나','sausage':'소시지','ham':'햄','bean':'콩','beans':'콩','sesame':'참깨','oil':'오일','vinegar':'식초','salt':'소금','sugar':'설탕','chips':'칩','chip':'칩','plus':'플러스','zero':'제로','light':'라이트','diet':'다이어트'};
-const CHO = {g:0,kk:1,n:2,d:3,tt:4,r:5,l:5,m:6,b:7,pp:8,s:9,ss:10,j:12,jj:13,ch:14,k:15,t:16,p:17,h:18};
-const VOWS = [['yae',3],['yeo',6],['wae',10],['eo',4],['eu',18],['ae',1],['ya',2],['ye',7],['wa',9],['oe',11],['yo',12],['wo',14],['we',15],['wi',16],['yu',17],['ui',19],['a',0],['e',5],['o',8],['u',13],['i',20]];
-const JONG = {k:1,g:1,n:4,d:7,t:7,l:8,r:8,m:16,b:17,p:17,ng:21,s:19};
-const CHOK = Object.keys(CHO).sort((a,b) => b.length - a.length);
-function romToHangul(word){
-  const w = word.toLowerCase(); if (!/^[a-z]+$/.test(w)) return null;
-  const vowAt = i => VOWS.find(([v]) => w.startsWith(v, i));
-  let i = 0, out = '';
-  while (i < w.length){
-    let ini = 11;
-    const k = CHOK.find(k => w.startsWith(k, i) && vowAt(i + k.length));
-    if (k){ ini = CHO[k]; i += k.length; }
-    const v = vowAt(i); if (!v) return null; i += v[0].length;
-    let j = i; while (j < w.length && !'aeiouyw'.includes(w[j])) j++;
-    const run = w.slice(i, j); let fin = 0;
-    if (run){
-      if (j >= w.length){ fin = JONG[run]; if (fin == null) return null; i = j; }
-      else if (run.length === 1) fin = 0;
-      else if (CHO[run] != null && run.length === 2) fin = 0;
-      else if (run.startsWith('ng')){ fin = 21; i += 2; }
-      else { fin = JONG[run[0]]; if (fin == null) return null; i += 1; }
-    }
-    out += String.fromCharCode(0xAC00 + (ini*21 + v[1])*28 + fin);
-  }
-  return out;
-}
-const looksKorean = w => /(eo|eu|yeo|kk|tt|jj|mm|nn|ssa|gyeo|hyeo)/i.test(w);
-function toKorean(text){
-  if (!text) return text;
-  const t = text.trim(), whole = BRANDS[t.toLowerCase().replace(/[.,]+$/,'')];
-  if (whole) return whole;
-  return t.replace(/[A-Za-z]+/g, w => {
-    const l = w.toLowerCase();
-    if (BRANDS[l]) return BRANDS[l];
-    if (WORDS[l]) return WORDS[l];
-    if (looksKorean(l)){ const h = romToHangul(l); if (h) return h; }
-    return w;
-  }).replace(/(^|\s)([가-힣]) ([가-힣])/g, '$1$2$3');
-}
-
-/* ---------- 카테고리 추정 ---------- */
-function guessCategory(tags, name){
-  const t = (tags||[]).join(' ').toLowerCase() + ' ' + (name||'');
-  const map = [
-    ['유제품', /dairy|milk|cheese|yogh?urt|우유|치즈|요거트|요구르트|버터|발효유|가공유|유가공|크림/],
-    ['육류', /meat|beef|pork|chicken|sausage|ham|육|고기|소시지|햄|닭|식육|축산/],
-    ['수산물', /fish|seafood|tuna|수산|생선|참치|어묵|오징어|새우|어육|젓갈|김$/],
-    ['채소/과일', /vegetable|fruit|채소|과일|야채/],
-    ['냉동식품', /frozen|냉동|만두/],
-    ['음료', /beverage|drink|juice|water|soda|coffee|tea|음료|주스|커피|차$|탄산|과채|생수/],
-    ['과자/간식', /snack|biscuit|cookie|chocolate|candy|cereal|과자|스낵|초콜릿|젤리|빵|쿠키|캔디|아이스크림|껌|시리얼|떡류/],
-    ['소스/양념', /sauce|condiment|spice|oil|gochujang|doenjang|ganjang|소스|양념|장$|장류|조미|간장|고추장|된장|케첩|오일|식초|드레싱/],
-    ['가공식품', /noodle|ramen|ramyun|myeon|bibim|jjajang|kimchi|canned|instant|soup|라면|면|통조림|즉석|국|죽|카레|밥|김치|만두|떡/]
-  ];
-  for (const [c, re] of map) if (re.test(t)) return c;
-  return '기타';
-}
-
-/* ---------- 제품 조회 (Open Food Facts) ---------- */
-async function lookup(code){
-  // 1순위: 식약처 C005 (Supabase Edge Function 프록시)
-  if (cfg.sbUrl && cfg.sbKey){
-    try{
-      const ctl = new AbortController(); setTimeout(() => ctl.abort(), 8000);
-      const r = await fetch(`${cfg.sbUrl}/functions/v1/barcode?code=${encodeURIComponent(code)}`, {headers:{apikey:cfg.sbKey}, signal:ctl.signal});
-      const j = await r.json();
-      if (j.found && j.name) return {name:j.name, brand:j.brand, category:guessCategory([j.type], j.name+' '+j.type), shelf:j.shelf, src:'식약처'};
-    }catch{}
-  }
-  // 2순위: 이 앱에 이전에 등록한 같은 바코드
-  const prev = items.find(i => i.barcode === code && !i.deleted);
-  if (prev) return {name:prev.name, brand:prev.brand, category:prev.category, src:'내 기록'};
-  // 3순위: Open Food Facts (영문 → 한글 변환)
-  try{
-    const ctl2 = new AbortController(); setTimeout(() => ctl2.abort(), 6000);
-    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_ko,brands,categories_tags`, {signal:ctl2.signal});
-    const j = await r.json();
-    if (j.status === 1 && j.product){
-      const p = j.product, raw = p.product_name_ko || p.product_name || '', rawBrand = (p.brands||'').split(',')[0].trim();
-      const name = toKorean(raw), brand = toKorean(rawBrand);
-      return {name, brand, category:guessCategory(p.categories_tags, raw + ' ' + name), src:'Open Food Facts'};
-    }
-  }catch{}
-  return null;
-}
-
-/* ---------- 스캔 (barcode-detector: 브라우저 내장 → zxing-cpp wasm 폴백) ---------- */
-const FORMATS = ['ean_13','ean_8','upc_a','upc_e','code_128'];
-let nativeDet = null, wasmDet = null, stream = null, scanning = false, cams = [], camIdx = -1;
-async function nativeDetector(){
-  if (nativeDet !== null) return nativeDet || null;
-  try{ if ('BarcodeDetector' in window){ nativeDet = new BarcodeDetector({formats:FORMATS}); return nativeDet; } }catch{}
-  nativeDet = false; return null;
-}
-async function wasmDetector(){
-  if (wasmDet) return wasmDet;
-  const m = await import('https://cdn.jsdelivr.net/npm/barcode-detector@2.3.1/+esm');
-  wasmDet = new m.BarcodeDetector({formats:FORMATS}); return wasmDet;
-}
-// 사진/프레임에서 바코드 값 읽기: 내장 인식기 → wasm 인식기 순서
-async function decode(src, tryWasm = true){
-  const nd = await nativeDetector();
-  if (nd){ try{ const r = await nd.detect(src); if (r.length) return r[0].rawValue; }catch{} }
-  if (tryWasm){ try{ const r = await (await wasmDetector()).detect(src); if (r.length) return r[0].rawValue; }catch(e){ console.error(e); } }
-  return null;
-}
-function stopStream(){
-  scanning = false;
-  try{ stream && stream.getTracks().forEach(t => t.stop()); }catch{}
-  stream = null; try{ $('cam').srcObject = null; }catch{}
-}
-async function startScan(deviceId){
-  if (typeof deviceId !== 'string') deviceId = null;
-  if (!$('dScan').open) $('dScan').showModal();
-  $('manualCode').value = ''; stopStream();
-  const base = deviceId ? {deviceId:{exact:deviceId}} : {facingMode:{ideal:'environment'}};
-  let lastErr = '';
-  for (const v of [{...base, width:{ideal:1920}, height:{ideal:1080}}, base]){
-    try{ stream = await navigator.mediaDevices.getUserMedia({video:v, audio:false}); break; }catch(e){ lastErr = String(e && e.name || e); }
-  }
-  if (!stream){ toast('카메라를 열 수 없습니다 (' + lastErr + '). 사진으로 인식을 이용하세요.'); $('camInfo').textContent = 'v12 · 카메라 오류: ' + lastErr; return; }
-  const track = stream.getVideoTracks()[0];
-  try{ await track.applyConstraints({advanced:[{focusMode:'continuous'}]}); }catch{}
-  $('cam').srcObject = stream; try{ await $('cam').play(); }catch{}
-  try{ cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); }catch{}
-  $('camInfo').textContent = `v12 · 카메라 ${cams.length}개: ` + cams.map(c => c.label || '이름없음').join(' / ');
-  scanning = true;
-  wasmDetector().catch(() => {});   // 미리 로드
-  const mine = stream, tick = async () => {
-    if (!scanning || stream !== mine) return;
-    try{
-      if ($('cam').readyState >= 2){ const code = await decode($('cam')); if (code && scanning && stream === mine){ scanning = false; return handleCode(code); } }
-    }catch{}
-    setTimeout(tick, 120);
-  };
-  tick();
-}
-async function stopScan(){ stopStream(); if ($('dScan').open) $('dScan').close(); }
-async function handleCode(code){
-  await stopScan(); toast('제품 조회 중…');
-  const info = await lookup(code);
-  openForm(null, {barcode:code, ...(info||{}), memo: info && info.shelf ? '표시: ' + info.shelf : ''});
-  toast(info ? `자동 입력됨 (${info.src}) — 확인/수정하세요` : '제품 정보를 찾지 못했습니다. 직접 입력해 주세요.');
-}
-$('btnAdd').onclick = () => startScan();
-$('scanClose').onclick = stopScan;
-$('lensBtn').onclick = () => {
-  const back = cams.filter(c => !/front|전면/i.test(c.label)); const list = back.length ? back : cams;
-  if (list.length < 2){ toast('이 브라우저는 렌즈를 1개만 제공합니다. Chrome으로 열거나 "사진으로 인식"을 쓰세요.'); return; }
-  camIdx = (camIdx + 1) % list.length; toast(`렌즈 ${camIdx+1}/${list.length}: ${list[camIdx].label||''}`);
-  startScan(list[camIdx].deviceId);
-};
-async function shrinkBmp(bmp, max){
-  const k = Math.min(1, max/Math.max(bmp.width,bmp.height)); if (k === 1) return bmp;
-  const c = document.createElement('canvas'); c.width = Math.round(bmp.width*k); c.height = Math.round(bmp.height*k);
-  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height); return createImageBitmap(c);
-}
-$('scanFile').onchange = async e => {
-  const f = e.target.files[0]; if (!f) return; e.target.value = '';
-  toast('사진 인식 중…'); stopStream();
-  let code = null;
-  try{
-    const bmp = await createImageBitmap(f);
-    for (const max of [4000, 2400, 1400]){      // 원본 → 줄인 버전 순서로 시도
-      code = await decode(await shrinkBmp(bmp, max)); if (code) break;
-    }
-  }catch(err){ console.error(err); }
-  if (code) return handleCode(code);
-  toast('바코드를 읽지 못했습니다. 바코드만 크게 찍거나 아래에 숫자를 직접 입력하세요.');
-  $('manualCode').focus();
-};
-$('scanSkip').onclick = async () => { await stopScan(); openForm(null, {}); };
-$('scanManual').onclick = () => { const c = $('manualCode').value.trim(); if (c) handleCode(c); };
 
 /* ---------- 폼 ---------- */
 $('fCat').innerHTML = CATS.map(c => `<option>${c}</option>`).join('');
@@ -358,13 +182,13 @@ $('quick').onclick = e => { const n = e.target.dataset.n; if (!n) return; const 
 
 function openForm(item, pre = {}){
   editing = item;
-  const v = item || {name:'', brand:'', category:'기타', exp_type:'소비기한', expiry:'', qty:1, barcode:'', memo:'', ...pre};
+  const v = item || {name:'', brand:'', category:'기타', exp_type:'소비기한', expiry:'', qty:1, memo:'', ...pre};
   $('fTitle').textContent = item ? '제품 수정' : '제품 등록';
   $('fName').value = v.name||''; $('fBrand').value = v.brand||''; $('fCat').value = CATS.includes(v.category) ? v.category : '기타';
   $('fType').value = v.exp_type||'소비기한'; $('fExp').value = v.expiry||''; $('fQty').value = v.qty||1;
-  $('fCode').value = v.barcode||''; $('fMemo').value = v.memo||'';
+  $('fMemo').value = v.memo||'';
   $('fDone').style.display = $('fDiscard').style.display = item ? '' : 'none';
-  updSearch(); $('aiNote').style.display = 'none';
+  $('aiNote').style.display = 'none';
   $('dForm').showModal();
 }
 $('fCancel').onclick = () => $('dForm').close();
@@ -372,7 +196,7 @@ $('form').onsubmit = e => {
   e.preventDefault();
   const rec = {
     id: editing?.id || uid(), name:$('fName').value.trim(), brand:$('fBrand').value.trim(), category:$('fCat').value,
-    exp_type:$('fType').value, expiry:$('fExp').value, qty:Number($('fQty').value)||1, barcode:$('fCode').value.trim(),
+    exp_type:$('fType').value, expiry:$('fExp').value, qty:Number($('fQty').value)||1, barcode:editing?.barcode ?? null,
     memo:$('fMemo').value.trim(), status: editing?.status || 'active', deleted:false, updated_at:Date.now()
   };
   if (!rec.name || !rec.expiry) return;
@@ -384,26 +208,11 @@ $('fDone').onclick = () => setStatus('done');
 $('fDiscard').onclick = () => setStatus('discarded');
 
 
-/* ---------- 코리안넷 검색 링크 / 붙여넣기 / 작성 중 임시저장 ---------- */
-function updSearch(){
-  const c = $('fCode').value.replace(/\D/g, ''), a = $('fSearch');
-  a.href = c ? 'https://www.koreannet.or.kr/front/koreannet/gtinSrch.do?gtin=' + c : '#';
-  a.style.opacity = c ? 1 : .4;
-  a.onclick = e => { if (!c){ e.preventDefault(); toast('바코드를 먼저 입력하세요'); } };
-}
-$('fCode').addEventListener('input', updSearch);
-$('fPaste').onclick = async () => {
-  try{
-    const t = (await navigator.clipboard.readText()).trim();
-    if (!t) return toast('클립보드가 비어 있습니다');
-    $('fName').value = t.split(/\r?\n/)[0].slice(0, 80); saveDraft(); toast('제품명에 붙여넣었습니다');
-  }catch{ toast('붙여넣기 권한이 없습니다. 제품명 칸을 길게 눌러 직접 붙여넣어 주세요.'); }
-};
-// 다른 탭(코리안넷)에 다녀오는 동안 폰이 페이지를 다시 불러와도 작성 중인 내용이 유지되도록
+/* ---------- 작성 중 임시저장 (카메라 앱에 다녀오다 페이지가 다시 불러와져도 유지) ---------- */
 function saveDraft(){
   if (!$('dForm').open) return;
   store.set('draft', {id: editing ? editing.id : null, v:{name:$('fName').value, brand:$('fBrand').value, category:$('fCat').value,
-    exp_type:$('fType').value, expiry:$('fExp').value, qty:$('fQty').value, barcode:$('fCode').value, memo:$('fMemo').value}});
+    exp_type:$('fType').value, expiry:$('fExp').value, qty:$('fQty').value, memo:$('fMemo').value}});
 }
 $('form').addEventListener('input', saveDraft);
 $('form').addEventListener('change', saveDraft);
@@ -415,64 +224,75 @@ function restoreDraft(){
   openForm(base || null, {});
   const v = d.v;
   $('fName').value = v.name; $('fBrand').value = v.brand; $('fCat').value = v.category; $('fType').value = v.exp_type;
-  $('fExp').value = v.expiry; $('fQty').value = v.qty; $('fCode').value = v.barcode; $('fMemo').value = v.memo; updSearch();
+  $('fExp').value = v.expiry; $('fQty').value = v.qty; $('fMemo').value = v.memo;
   toast('작성 중이던 내용을 복원했습니다');
 }
 
+/* ---------- 제품 추가: 수동 등록 / 사진 AI 분석 (최대 5장) ---------- */
+const MAX_PHOTOS = 5;
+let photos = [];   // data URL 배열
 
-/* ---------- v2: 제품 사진 AI 분석 (Supabase Edge Function `analyze` → OpenRouter) ---------- */
-async function photoToDataUrl(bmp, max = 1280, q = .85){
+$('btnAdd').onclick = () => $('dAdd').showModal();
+$('addClose').onclick = () => $('dAdd').close();
+$('addManual').onclick = () => { $('dAdd').close(); openForm(null, {}); };
+$('addAi').onclick = () => {
+  $('dAdd').close(); photos = []; renderThumbs(); $('dPhotos').showModal();
+  try{ $('photoInput').click(); }catch{}          // 바로 카메라가 열리도록 (취소해도 "사진 찍기"로 다시 가능)
+};
+$('photosClose').onclick = () => $('dPhotos').close();
+$('dPhotos').addEventListener('close', () => { photos = []; });
+
+function renderThumbs(){
+  $('thumbs').innerHTML = photos.map((u, i) => `<div class="thumb"><img src="${u}" alt="사진 ${i+1}"><button type="button" data-i="${i}" aria-label="삭제">×</button></div>`).join('');
+  const full = photos.length >= MAX_PHOTOS;
+  $('addPhotoLbl').style.opacity = full ? .45 : 1; $('photoInput').disabled = full;
+  $('addPhotoLbl').firstChild.textContent = photos.length ? `📸 사진 추가 (${photos.length}/${MAX_PHOTOS})` : '📸 사진 찍기';
+  $('doAnalyze').disabled = !photos.length;
+  $('doAnalyze').textContent = photos.length ? `🤖 ${photos.length}장 분석하기` : '🤖 분석하기';
+}
+$('thumbs').onclick = e => { const b = e.target.closest('button[data-i]'); if (b){ photos.splice(Number(b.dataset.i), 1); renderThumbs(); } };
+$('photoInput').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f || photos.length >= MAX_PHOTOS) return;
+  try{ photos.push(await photoToDataUrl(await createImageBitmap(f))); renderThumbs(); }
+  catch{ toast('사진을 불러오지 못했습니다. 다시 찍어 주세요.'); }
+};
+
+async function photoToDataUrl(bmp, max = 1024, q = .8){
   const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const c = document.createElement('canvas'); c.width = Math.round(bmp.width*k); c.height = Math.round(bmp.height*k);
   c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', q);
 }
-async function callAnalyze(dataUrl){
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 75000);
+// Supabase Edge Function `analyze` → OpenRouter 비전 모델
+async function callAnalyze(images){
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 110000);
   try{
     const r = await fetch(`${cfg.sbUrl}/functions/v1/analyze`, {method:'POST', signal:ctl.signal,
-      headers:{'Content-Type':'application/json', apikey:cfg.sbKey, 'x-admin-token':cfg.aiToken}, body:JSON.stringify({image:dataUrl})});
+      headers:{'Content-Type':'application/json', apikey:cfg.sbKey, 'x-admin-token':cfg.aiToken}, body:JSON.stringify({images})});
     const j = await r.json().catch(() => ({}));
     if (r.status === 401) throw new Error('token');
     if (!j.ok) throw new Error('fail');
     return j;
   } finally { clearTimeout(t); }
 }
-async function analyzeFile(f){
+$('doAnalyze').onclick = async () => {
+  if (!photos.length) return;
   if (!cfg.sbUrl || !cfg.sbKey || !cfg.aiToken) return toast('⚙ 설정에 "AI 분석 토큰"을 입력하세요', 3500);
-  const formOpen = $('dForm').open;
-  stopStream(); if ($('dScan').open) $('dScan').close();
-  toast('🤖 AI가 사진을 분석 중… (최대 1분)', 70000);
-  let ai = null, err = '', info = null, barcode = null;
+  const btn = $('doAnalyze'); btn.disabled = true; btn.textContent = '🤖 분석 중… (최대 1~2분)';
+  toast('🤖 AI가 사진을 분석 중입니다', 100000);
   try{
-    const bmp = await createImageBitmap(f);
-    const small = await photoToDataUrl(bmp);
-    const aiP = callAnalyze(small).then(j => ai = j.data).catch(e => { err = e.message; });
-    barcode = await decode(await shrinkBmp(bmp, 2400));          // 바코드 숫자는 LLM이 아니라 인식기로 읽음
-    if (barcode && !formOpen) info = await lookup(barcode);       // 식약처/내 기록/OFF가 있으면 그쪽이 더 정확
-    await aiP;
-  }catch(e){ console.error(e); err = err || 'fail'; }
-  if (!ai && !info && !barcode){
-    return toast(err === 'token' ? 'AI 토큰이 올바르지 않습니다. ⚙ 설정을 확인하세요.' : 'AI 분석에 실패했습니다. (한도 초과일 수 있어요) 잠시 후 다시 시도하거나 직접 입력하세요.', 4500);
+    const { data: ai } = await callAnalyze(photos.slice());
+    $('dPhotos').close();
+    openForm(null, {name: ai.name || '', brand: ai.brand || '', category: ai.category || '기타',
+      exp_type: ai.exp_type || '소비기한', expiry: ai.expiry || ''});
+    $('aiNote').style.display = '';
+    if (ai.expiry){ $('fExp').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExp').style.outline = '', 6000); }
+    toast(ai.confidence === 'low' ? '자동 입력됨 — 확신도 낮음, 꼭 확인하세요' : '자동 입력됨 — 확인/수정하세요', 4000);
+  }catch(e){
+    renderThumbs();
+    toast(e.message === 'token' ? 'AI 토큰이 올바르지 않습니다. ⚙ 설정을 확인하세요.' : 'AI 분석에 실패했습니다. (무료 모델 한도 초과일 수 있어요) 다시 시도하거나 수동 등록을 이용하세요.', 5000);
   }
-  const src = [info && info.src, ai && 'AI'].filter(Boolean).join(' + ');
-  if (formOpen){          // 2번째 사진(날짜면 등): 비어 있는 칸만 채움
-    const fill = (id, v, empty = x => !x) => { if (v && empty($(id).value)) $(id).value = v; };
-    if (ai){ fill('fName', ai.name); fill('fBrand', ai.brand); fill('fCat', ai.category, x => !x || x === '기타'); fill('fExp', ai.expiry); if (ai.exp_type && ai.expiry && !$('fExp').dataset.touched) $('fType').value = ai.exp_type; }
-    fill('fCode', barcode || (ai && ai.barcode)); updSearch(); saveDraft();
-  } else {
-    openForm(null, {
-      barcode: barcode || (ai && ai.barcode) || '',
-      name: (info && info.name) || (ai && ai.name) || '', brand: (info && info.brand) || (ai && ai.brand) || '',
-      category: (info && info.category) || (ai && ai.category) || '기타',
-      exp_type: (ai && ai.exp_type) || '소비기한', expiry: (ai && ai.expiry) || '',
-      memo: info && info.shelf ? '표시: ' + info.shelf : ''
-    });
-  }
-  if (ai){ $('aiNote').style.display = ''; if (ai.expiry){ $('fExp').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExp').style.outline = '', 6000); } }
-  toast(`자동 입력됨 (${src || '바코드'})${ai && ai.confidence === 'low' ? ' — 확신도 낮음, 꼭 확인하세요' : ' — 확인/수정하세요'}`, 4000);
-}
-for (const id of ['aiFile', 'aiFile2']) $(id).onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) analyzeFile(f); };
+};
 
 /* ---------- 동기화 (Supabase) ---------- */
 function initSb(){

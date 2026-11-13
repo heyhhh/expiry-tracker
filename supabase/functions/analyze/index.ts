@@ -12,12 +12,11 @@ const CATS = ['유제품', '육류', '수산물', '채소/과일', '음료', '�
 const DEFAULT_MODELS = 'google/gemma-4-31b-it:free,particle-ai/particle-1:free,google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3.5-super-vl:free';
 const MAX_IMAGE_CHARS = 1_800_000; // data URL 길이 상한 (약 1.3MB)
 
-const PROMPT = `당신은 한국 식품 포장 사진을 읽는 도우미입니다. 사진에 실제로 인쇄된 글자만 근거로 아래 JSON 하나만 출력하세요. 설명이나 코드블록은 쓰지 마세요.
+const PROMPT = `당신은 한국 식품 포장 사진을 읽는 도우미입니다. 사진이 여러 장이면 모두 같은 제품의 앞면/뒷면/날짜 인쇄면 등 서로 다른 면입니다. 모든 사진에 실제로 인쇄된 글자만 근거로 종합해서 아래 JSON 하나만 출력하세요. 설명이나 코드블록은 쓰지 마세요.
 {
  "name": "제품명 (한국어 그대로, 용량/규격 제외)",
  "brand": "브랜드 또는 제조사",
  "category": "${CATS.join(' | ')} 중 하나",
- "barcode": "바코드 숫자가 또렷하게 읽힐 때만 숫자, 아니면 null",
  "exp_type": "소비기한 | 유통기한 | null (문구가 보일 때만)",
  "expiry": "YYYY-MM-DD 형식의 기한 날짜, 보이지 않거나 불확실하면 null",
  "confidence": "high | medium | low"
@@ -83,7 +82,7 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'quota lookup failed' }, 502);
     }
   }
-  const images: string[] = (Array.isArray(body.images) ? body.images : [body.image]).filter(Boolean).slice(0, 3);
+  const images: string[] = (Array.isArray(body.images) ? body.images : [body.image]).filter(Boolean).slice(0, 5);
   if (!images.length) return json({ ok: false, error: 'no image' }, 400);
   for (const im of images) {
     if (typeof im !== 'string' || !im.startsWith('data:image/') || im.length > MAX_IMAGE_CHARS)
