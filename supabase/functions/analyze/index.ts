@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'quota lookup failed' }, 502);
     }
   }
-  const images: string[] = (Array.isArray(body.images) ? body.images : [body.image]).filter(Boolean).slice(0, 5);
+  const images: string[] = (Array.isArray(body.images) ? body.images : [body.image]).filter(Boolean).slice(0, 10);
   if (!images.length) return json({ ok: false, error: 'no image' }, 400);
   for (const im of images) {
     if (typeof im !== 'string' || !im.startsWith('data:image/') || im.length > MAX_IMAGE_CHARS)
@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
         const str = typeof text === 'string' ? text : JSON.stringify(text ?? '');
         const parsed = parse(str);
         const rawItems = Array.isArray(parsed?.items) ? parsed.items : (parsed ? [parsed] : []);
-        const list = rawItems.slice(0, 8).map((o: any) => clean(o, images.length)).filter((d: any) => d && (d.name || d.brand || d.expiry));
+        const list = rawItems.slice(0, 10).map((o: any) => clean(o, images.length)).filter((d: any) => d && (d.name || d.brand || d.expiry));
         const data = list[0];
         if (!data) {
           const fin = j?.choices?.[0]?.finish_reason;

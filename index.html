@@ -195,13 +195,13 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v30</p>
+  <p class="hint" id="verInfo">v31</p>
 </div></dialog>
 
-<!-- 사진 모으기 (최대 5장) -->
+<!-- 사진 모으기 (최대 10장) -->
 <dialog id="dPhotos"><div class="sheet">
   <h2>제품 사진 AI 분석</h2>
-  <p class="hint">제품 앞면, 기한이 인쇄된 면 등을 <b>최대 5장</b>까지 찍을 수 있어요. 1장만 찍고 바로 분석해도 됩니다.</p>
+  <p class="hint">제품 앞면, 기한이 인쇄된 면 등을 <b>최대 10장</b>까지 찍을 수 있어요. 1장만 찍고 바로 분석해도 됩니다.</p>
   <div class="thumbs" id="thumbs"></div>
   <div class="btns">
     <label class="btn" id="addPhotoLbl" style="text-align:center;cursor:pointer;color:var(--ink)">📸 사진 찍기<input type="file" id="photoInput" accept="image/*" capture="environment" hidden></label>
@@ -660,8 +660,8 @@ function restoreDraft(){
   toast('작성 중이던 내용을 복원했습니다');
 }
 
-/* ---------- 제품 추가: 수동 등록 / 사진 AI 분석 (최대 5장) ---------- */
-const MAX_PHOTOS = 5;
+/* ---------- 제품 추가: 수동 등록 / 사진 AI 분석 (최대 10장) ---------- */
+const MAX_PHOTOS = 10;
 let photos = [];   // data URL 배열
 
 $('btnAdd').onclick = () => $('dAdd').showModal();

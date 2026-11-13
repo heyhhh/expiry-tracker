@@ -318,3 +318,6 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 - 구성: `package.json`(Capacitor 6 + local-notifications/filesystem/share), `capacitor.config.json`(appId `io.github.heyhhh.expirykeeper`, webDir `www`), `scripts/build-www.js`(웹 파일 → www), `scripts/patch-android.js`(카메라/알림 권한), `assets/`(아이콘 PNG), `.github/workflows/android.yml`(수동 실행 → `cap add android` → 아이콘 생성 → `assembleDebug` → Releases에 `expiry-keeper.apk` 업로드). `android/`·`www/`·`node_modules/`는 커밋하지 않음(CI에서 생성).
 - 웹 코드: Supabase/SheetJS를 `vendor/`로 내장(CDN 제거), `NATIVE` 판별 → 앱에서는 제품별 기한 알림을 기기에 예약(`scheduleNative()`, 기한 N일 전·당일 09:00, 최대 60개, 앱이 꺼져 있어도 울림), 엑셀 내보내기는 공유 시트(`saveWorkbook()`).
 - 미검증: 실제 APK 빌드/설치(CI 최초 실행 전). iOS는 Mac/Xcode와 Apple 개발자 계정(연 99달러) 필요.
+
+## 30. v31: 사진 최대 10장
+- 앱 `MAX_PHOTOS` 5→10, analyze `images.slice(0,10)`, 한 번에 인식하는 제품 수 상한 10개(analyze v21). 사진은 클라이언트에서 1024px/품질 0.8로 줄여 전송(10장 ≈ 2MB). 무료 모델은 사진이 많을수록 느려지고(최대 1~2분) 정확도가 떨어질 수 있음. APK는 새로 빌드해야 반영됨.
