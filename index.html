@@ -100,11 +100,15 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
 .thumb{position:relative;aspect-ratio:1;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--surface2)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb button{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:99px;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:16px;line-height:1;cursor:pointer}
+.pickgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pickitem{aspect-ratio:1;border-radius:16px;overflow:hidden;border:2px solid transparent;background:var(--surface2);padding:0;cursor:pointer}
+.pickitem.on{border-color:var(--brand)}
+.pickitem img{width:100%;height:100%;object-fit:contain;display:block;background:#fff}
 .ic.has{overflow:hidden;background:var(--surface2)}
-.ic img{width:100%;height:100%;object-fit:cover;display:block}
+.ic img{width:100%;height:100%;object-fit:contain;display:block;background:#fff}
 .photorow{display:flex;gap:14px;align-items:center}
 .pthumb{width:68px;height:68px;border-radius:18px;overflow:hidden;background:var(--surface2);display:grid;place-items:center;font-size:32px;flex:none}
-.pthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.pthumb img{width:100%;height:100%;object-fit:contain;display:block;background:#fff}
 .pbtns{display:flex;gap:8px;flex-wrap:wrap}
 .btn.sm{flex:none;padding:9px 13px;font-size:14px;text-align:center}
 .rvph{width:34px;height:34px;border-radius:10px;object-fit:cover}
@@ -180,7 +184,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v18</p>
+  <p class="hint" id="verInfo">v20</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -203,8 +207,8 @@ input.bad{outline:2px solid var(--red)}
   <div class="photorow">
     <div class="pthumb" id="fPhotoBox" aria-hidden="true">📦</div>
     <div class="pbtns">
-      <label class="btn sm" style="cursor:pointer">📷 <span id="fPhotoLbl">사진 추가</span><input type="file" id="fPhotoInput" accept="image/*" hidden></label>
-      <button type="button" class="btn sm" id="fPhotoDel" style="display:none">사진 삭제</button>
+      <button type="button" class="btn sm" id="fPhotoPick">🔍 <span id="fPhotoLbl">제품 이미지 찾기</span></button>
+      <button type="button" class="btn sm" id="fPhotoDel" style="display:none">이미지 삭제</button>
     </div>
   </div>
   <label>제품명<input id="fName" required></label>
@@ -228,6 +232,19 @@ input.bad{outline:2px solid var(--red)}
     <button type="button" class="btn" id="fCancel">취소</button>
   </div>
 </form></dialog>
+
+<!-- 제품 이미지 선택 (인터넷 검색 결과 / 내 사진 / 이모지) -->
+<dialog id="dImgPick"><div class="sheet">
+  <h2>제품 이미지 선택</h2>
+  <p class="hint" id="ipStatus" role="status">제품 이미지를 찾는 중…</p>
+  <div class="pickgrid" id="ipGrid"></div>
+  <div class="btns">
+    <label class="btn sm" style="cursor:pointer">📷 내 사진 사용<input type="file" id="ipOwn" accept="image/*" hidden></label>
+    <button type="button" class="btn sm" id="ipNone">이모지로</button>
+    <button type="button" class="btn sm" id="ipClose">닫기</button>
+  </div>
+  <p class="hint">제품 이미지는 인터넷(네이버) 검색 결과라 제품과 다를 수 있어요. 이미지 파일은 저장하지 않고 주소만 저장합니다.</p>
+</div></dialog>
 
 <!-- 여러 제품 확인 후 한꺼번에 등록 -->
 <dialog id="dReview"><div class="sheet">
@@ -315,6 +332,8 @@ function askConfirm(title, msg, okLabel = '확인'){
   });
 }
 
+// 이미지(외부 주소 또는 내 사진 썸네일). 불러오지 못하면 카테고리 이모지로 대체
+const imgHtml = (url, emoji) => `<img src="${esc(url)}" alt="" referrerpolicy="no-referrer" loading="lazy" data-e="${esc(emoji)}" onerror="this.replaceWith(document.createTextNode(this.dataset.e))">`;
 function save(){ store.set('items', items); render(); }
 function tone(d){ return d <= 1 ? 't-red' : d <= 3 ? 't-org' : d <= 7 ? 't-yel' : 't-grn'; }
 function label(d){ return d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`; }
@@ -334,7 +353,7 @@ function render(){
     .sort((a,b) => a.expiry.localeCompare(b.expiry));
   $('list').innerHTML = rows.length ? rows.map(i => { const d = dday(i.expiry);
     return `<div class="card ${tone(d)}" data-id="${esc(i.id)}">
-      <div class="ic ${i.photo?'has':''}" aria-hidden="true">${i.photo ? `<img src="${esc(i.photo)}" alt="" loading="lazy">` : (ICONS[i.category]||'📦')}</div>
+      <div class="ic ${i.photo?'has':''}" aria-hidden="true">${i.photo ? imgHtml(i.photo, ICONS[i.category]||'📦') : (ICONS[i.category]||'📦')}</div>
       <div class="info"><div class="n">${esc(i.name)}</div>
         <div class="m">${esc([i.brand, i.category].filter(Boolean).join(' · '))}</div>
         <div class="m">${esc(i.exp_type||'')} ${fmtShort(i.expiry)}${i.memo?' · '+esc(i.memo):''}</div></div>
@@ -366,13 +385,33 @@ $('list').onclick = e => {
 $('fCat').innerHTML = CATS.map(c => `<option>${c}</option>`).join('');
 $('quick').innerHTML = [['+3일',3],['+7일',7],['+14일',14],['+1개월',30],['+3개월',90],['+6개월',180],['+1년',365]]
   .map(([t,n]) => `<button type="button" data-n="${n}">${t}</button>`).join('');
-function setExp(v){ $('fExpT').value = v || ''; $('fExp').value = parseDate(v) || ''; $('fExpT').classList.remove('bad'); }
+// 칸을 누르면 기존 값을 전체 선택 → 바로 덮어쓸 수 있게 (AI가 채운 값을 고칠 때 뒤에 붙던 문제 방지)
+function selectAllSoon(el){ setTimeout(() => { try{ el.select(); el.setSelectionRange(0, el.value.length); }catch{} }, 0); }
+// 입력하는 동안 어떻게 해석되는지 바로 보여줌
+function updateExpHint(){
+  const h = $('expHint'), raw = $('fExpT').value.trim();
+  const base = '숫자만 입력해도 됩니다 (예: 20270305, 270305). 오른쪽 📅를 누르면 달력으로 고를 수 있어요.';
+  if (!raw){ h.textContent = base; h.style.color = ''; return; }
+  const p = parseDate(raw);
+  if (p){ const d = new Date(p + 'T00:00:00'); h.textContent = `→ ${p} (${DOW[d.getDay()]}요일)로 저장됩니다`; h.style.color = 'var(--grn)'; return; }
+  const digits = raw.replace(/\D/g, '').length;
+  if (digits > 0 && digits < 8 && !(digits === 6 && !raw.startsWith('20'))){ h.textContent = `계속 입력하세요 — YYMMDD(6자리) 또는 YYYYMMDD(8자리). 지금 ${digits}자리`; h.style.color = 'var(--sub)'; }
+  else { h.textContent = '날짜 형식을 확인해 주세요 (예: 2027-03-05, 270305)'; h.style.color = 'var(--red)'; }
+}
+function setExp(v){ const t = $('fExpT'); t.value = v || ''; $('fExp').value = parseDate(v) || ''; t.dataset.norm = parseDate(v) || ''; t.classList.remove('bad'); updateExpHint(); }
 function normExp(){
   const t = $('fExpT'), p = parseDate(t.value);
-  if (p){ t.value = p; $('fExp').value = p; t.classList.remove('bad'); } else t.classList.toggle('bad', !!t.value.trim());
+  if (p){ t.value = p; $('fExp').value = p; t.dataset.norm = p; t.classList.remove('bad'); } else t.classList.toggle('bad', !!t.value.trim());
+  updateExpHint();
 }
 $('fExpT').addEventListener('blur', normExp); $('fExpT').addEventListener('change', normExp);
-$('fExpT').addEventListener('input', () => $('fExpT').classList.remove('bad'));
+$('fExpT').addEventListener('focus', e => selectAllSoon(e.target));
+$('fExpT').addEventListener('input', () => {
+  const t = $('fExpT'), n = t.dataset.norm || '';
+  // 선택이 안 된 채로 기존 날짜 뒤에 입력이 붙으면 기존 값을 제거하고 새로 입력한 부분만 사용
+  if (n && t.value.length > n.length && t.value.startsWith(n)) t.value = t.value.slice(n.length);
+  t.classList.remove('bad'); updateExpHint();
+});
 $('fExp').addEventListener('change', () => { setExp($('fExp').value); saveDraft(); });
 $('quick').onclick = e => { const n = e.target.dataset.n; if (!n) return; const d = today(); d.setDate(d.getDate()+Number(n)); setExp(fmt(d)); saveDraft(); };
 
@@ -388,17 +427,70 @@ async function makeThumb(src, size = 160){
   return c.toDataURL('image/jpeg', .72);
 }
 function renderFormPhoto(){
-  $('fPhotoBox').innerHTML = formPhoto ? `<img src="${esc(formPhoto)}" alt="">` : (ICONS[$('fCat').value] || '📦');
-  $('fPhotoLbl').textContent = formPhoto ? '사진 바꾸기' : '사진 추가';
+  $('fPhotoBox').innerHTML = formPhoto ? imgHtml(formPhoto, ICONS[$('fCat').value] || '📦') : (ICONS[$('fCat').value] || '📦');
+  $('fPhotoLbl').textContent = formPhoto ? '이미지 바꾸기' : '제품 이미지 찾기';
   $('fPhotoDel').style.display = formPhoto ? '' : 'none';
 }
 $('fCat').addEventListener('change', () => { if (!formPhoto) renderFormPhoto(); });
-$('fPhotoInput').onchange = async e => {
-  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  try{ formPhoto = await makeThumb(f); renderFormPhoto(); saveDraft(); }
-  catch{ toast('사진을 불러오지 못했습니다. 다시 시도해 주세요.'); }
+function applyImage(url){ formPhoto = url || ''; renderFormPhoto(); saveDraft(); }
+$('fPhotoDel').onclick = () => { photoCleared = true; applyImage(''); };
+
+/* ---------- 제품 이미지 검색 (Edge Function `productimage` → 네이버 검색) ---------- */
+let photoCleared = false, formImages = [];
+async function findImages(name, brand){
+  name = (name || '').trim(); brand = (brand || '').trim();
+  if (name.length < 2) return {ok:false, items:[], err:'short'};
+  if (!cfg.sbUrl || !cfg.sbKey || !cfg.aiToken) return {ok:false, items:[], err:'notoken'};
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+  try{
+    const r = await fetch(`${cfg.sbUrl}/functions/v1/productimage`, {method:'POST', signal:ctl.signal,
+      headers:{'Content-Type':'application/json', apikey:cfg.sbKey, 'x-admin-token':cfg.aiToken}, body:JSON.stringify({q:name, brand})});
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) return {ok:false, items:[], err:'token'};
+    if (!j.ok) return {ok:false, items:[], err:j.error || ('http ' + r.status)};
+    return {ok:true, items:j.items || [], source:j.source};
+  }catch(e){ return {ok:false, items:[], err: e && e.name === 'AbortError' ? 'timeout' : 'network'}; }
+  finally{ clearTimeout(t); }
+}
+// 새 제품이고 이미지가 없을 때 제품명으로 자동 검색해서 첫 번째 결과를 적용 (틀리면 사용자가 바꿈)
+async function autoImage(){
+  if (editing || formPhoto || photoCleared) return;
+  const name = $('fName').value.trim(), brand = $('fBrand').value.trim(), tag = name + '|' + brand;
+  const res = await findImages(name, brand);
+  if (!res.ok || !res.items.length) return;
+  if ($('dForm').open && !editing && !formPhoto && !photoCleared && ($('fName').value.trim() + '|' + $('fBrand').value.trim()) === tag){
+    formImages = res.items; applyImage(res.items[0].image);
+  }
+}
+$('fName').addEventListener('change', () => autoImage());
+
+const IP_ERR = {
+  short:'제품명을 2글자 이상 입력한 뒤 눌러 주세요.',
+  notoken:'이 기기에 AI 토큰이 없어 검색할 수 없어요. ⚙ 설정에서 토큰을 확인해 주세요.',
+  token:'AI 토큰이 올바르지 않아요. ⚙ 설정을 확인해 주세요.',
+  timeout:'검색 시간이 너무 오래 걸렸어요. 잠시 후 다시 시도해 주세요.',
+  network:'서버에 연결하지 못했어요. 네트워크를 확인해 주세요.',
+  'naver keys missing':'이미지 검색 설정(네이버 API 키)이 아직 안 되어 있어요.'
 };
-$('fPhotoDel').onclick = () => { formPhoto = ''; renderFormPhoto(); saveDraft(); };
+function renderPickGrid(){
+  $('ipGrid').innerHTML = formImages.map((it, i) => `<button type="button" class="pickitem ${it.image === formPhoto ? 'on' : ''}" data-i="${i}" title="${esc(it.title)}"><img src="${esc(it.image)}" alt="${esc(it.title)}" referrerpolicy="no-referrer" loading="lazy" onerror="this.closest('.pickitem').remove()"></button>`).join('');
+  $('ipStatus').textContent = formImages.length ? `검색 결과 ${formImages.length}개 — 맞는 이미지를 눌러 선택하세요` : '';
+}
+$('fPhotoPick').onclick = async () => {
+  $('ipGrid').innerHTML = ''; $('ipStatus').textContent = '제품 이미지를 찾는 중…'; $('dImgPick').showModal();
+  const res = await findImages($('fName').value, $('fBrand').value);
+  if (!res.ok){ $('ipStatus').textContent = IP_ERR[res.err] || (String(res.err).startsWith('naver') ? '이미지 검색 서비스가 요청을 거절했어요. (' + String(res.err).slice(0, 140) + ')' : '이미지를 찾지 못했어요. (' + res.err + ')'); return; }
+  if (!res.items.length){ $('ipStatus').textContent = '검색 결과가 없어요. 제품명을 더 정확히 입력하거나 "내 사진 사용"을 눌러 보세요.'; return; }
+  formImages = res.items; renderPickGrid();
+};
+$('ipGrid').onclick = e => { const b = e.target.closest('.pickitem'); if (!b) return; photoCleared = false; applyImage(formImages[Number(b.dataset.i)].image); $('dImgPick').close(); };
+$('ipOwn').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try{ photoCleared = false; applyImage(await makeThumb(f)); $('dImgPick').close(); }
+  catch{ $('ipStatus').textContent = '사진을 불러오지 못했어요. 다시 시도해 주세요.'; }
+};
+$('ipNone').onclick = () => { photoCleared = true; applyImage(''); $('dImgPick').close(); };
+$('ipClose').onclick = () => $('dImgPick').close();
 
 function openForm(item, pre = {}){
   editing = item;
@@ -407,7 +499,7 @@ function openForm(item, pre = {}){
   $('fName').value = v.name||''; $('fBrand').value = v.brand||''; $('fCat').value = CATS.includes(v.category) ? v.category : '기타';
   $('fType').value = EXP_TYPES.includes(v.exp_type) ? v.exp_type : '소비기한'; setExp(v.expiry||''); $('fQty').value = v.qty||1;
   $('fMemo').value = v.memo||'';
-  formPhoto = (item ? item.photo : pre.photo) || ''; renderFormPhoto();
+  formPhoto = (item ? item.photo : pre.photo) || ''; photoCleared = false; formImages = []; renderFormPhoto();
   $('fDone').style.display = $('fDiscard').style.display = item ? '' : 'none';
   $('aiNote').style.display = 'none';
   $('dForm').showModal();
@@ -542,19 +634,15 @@ $('doAnalyze').onclick = async () => {
     const src = photos.slice();
     const res = await callAnalyze(src);
     const list = (Array.isArray(res.items) && res.items.length) ? res.items : [res.data];
-    // 제품별 썸네일: AI가 알려준 사진 번호 → 없으면 (제품이 1개일 때) 첫 사진 → 그래도 없으면 이모지 아이콘
-    const thumbs = await Promise.all(list.map(async it => {
-      const idx = it.photo ? it.photo - 1 : (list.length === 1 ? 0 : -1);
-      try{ return idx >= 0 && src[idx] ? await makeThumb(src[idx]) : ''; }catch{ return ''; }
-    }));
     clearPhotoDraft(); $('dPhotos').close();
     if (list.length > 1){
-      openReview(list.map((it, i) => ({...it, photo: thumbs[i]})));
+      openReview(list);
       toast(`제품 ${list.length}개를 인식했어요 — 확인/수정 후 등록하세요`, 4500);
     } else {
       const ai = list[0];
       openForm(null, {name: ai.name || '', brand: ai.brand || '', category: ai.category || '기타',
-        exp_type: ai.exp_type || '소비기한', expiry: ai.expiry || '', photo: thumbs[0]});
+        exp_type: ai.exp_type || '소비기한', expiry: ai.expiry || ''});
+      autoImage();
       $('aiNote').style.display = '';
       if (ai.expiry){ $('fExpT').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExpT').style.outline = '', 6000); }
       toast(ai.confidence === 'low' ? '자동 입력됨 — 확신도 낮음, 꼭 확인하세요' : '자동 입력됨 — 확인/수정하세요', 4000);
@@ -567,21 +655,33 @@ $('doAnalyze').onclick = async () => {
 
 
 /* ---------- 여러 제품 확인 → 모두 등록 ---------- */
-let reviewItems = [];
+let reviewItems = [], rvSeq = 0;
+function setReviewPhoto(rid, url){
+  const idx = reviewItems.findIndex(x => x.rid === rid); if (idx < 0) return;
+  reviewItems[idx].photo = url;
+  const box = $('rvList').children[idx]; if (!box) return;
+  const left = box.querySelector('.rv-left'); let img = left.querySelector('.rvph');
+  if (!img){ img = document.createElement('img'); img.className = 'rvph'; img.alt = ''; img.referrerPolicy = 'no-referrer'; img.onerror = () => img.remove(); left.appendChild(img); }
+  img.src = url;
+}
+// 확인 화면이 열린 뒤 제품별 이미지를 찾아 채움 (기다리지 않고 도착하는 대로)
+function fetchReviewImages(){
+  reviewItems.forEach(it => { const rid = it.rid; findImages(it.name, it.brand).then(res => { if (res.ok && res.items.length) setReviewPhoto(rid, res.items[0].image); }); });
+}
 function openReview(list){
   reviewItems = list.map(x => ({name:x.name||'', brand:x.brand||'', category:CATS.includes(x.category)?x.category:'기타',
-    exp_type:EXP_TYPES.includes(x.exp_type)?x.exp_type:'소비기한', expiry:x.expiry||'', qty:1, photo: typeof x.photo === 'string' ? x.photo : ''}));
-  renderReview(); $('dReview').showModal();
+    exp_type:EXP_TYPES.includes(x.exp_type)?x.exp_type:'소비기한', expiry:x.expiry||'', qty:1, photo:'', rid:++rvSeq}));
+  renderReview(); $('dReview').showModal(); fetchReviewImages();
 }
 function renderReview(){
   $('rvTitle').textContent = `인식된 제품 ${reviewItems.length}개`;
   $('rvList').innerHTML = reviewItems.map((it, i) => `<div class="rv" data-i="${i}">
-    <div class="rv-head"><div class="rv-left"><b>${i+1}</b>${it.photo ? `<img class="rvph" src="${esc(it.photo)}" alt="">` : ''}</div><button type="button" class="rv-del" data-del="${i}" aria-label="이 제품 빼기">×</button></div>
+    <div class="rv-head"><div class="rv-left"><b>${i+1}</b>${it.photo ? `<img class="rvph" src="${esc(it.photo)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div><button type="button" class="rv-del" data-del="${i}" aria-label="이 제품 빼기">×</button></div>
     <label>제품명<input data-f="name" value="${esc(it.name)}"></label>
     <div class="row"><label>브랜드<input data-f="brand" value="${esc(it.brand)}"></label>
       <label>카테고리<select data-f="category">${CATS.map(c => `<option ${c===it.category?'selected':''}>${c}</option>`).join('')}</select></label></div>
     <div class="row3"><label>기한 종류<select data-f="exp_type">${EXP_TYPES.map(t => `<option ${t===it.exp_type?'selected':''}>${t}</option>`).join('')}</select></label>
-      <label>기한 날짜<div class="datebox"><input data-f="expiry" type="text" inputmode="numeric" autocomplete="off" placeholder="2027-03-05" value="${esc(it.expiry)}"><input type="date" class="dpick" data-pick value="${esc(parseDate(it.expiry)||'')}" aria-label="달력에서 선택"><span class="calico" aria-hidden="true">📅</span></div></label>
+      <label>기한 날짜<div class="datebox"><input data-f="expiry" type="text" inputmode="numeric" autocomplete="off" placeholder="2027-03-05" value="${esc(it.expiry)}" data-norm="${esc(parseDate(it.expiry)||'')}"><input type="date" class="dpick" data-pick value="${esc(parseDate(it.expiry)||'')}" aria-label="달력에서 선택"><span class="calico" aria-hidden="true">📅</span></div></label>
       <label>수량<input type="number" min="1" data-f="qty" value="${esc(it.qty)}" inputmode="numeric"></label></div>
   </div>`).join('');
 }
@@ -589,18 +689,23 @@ const rvEdit = e => {
   const box = e.target.closest('.rv'); if (!box) return;
   const it = reviewItems[Number(box.dataset.i)];
   if (e.target.matches('[data-pick]')){            // 달력에서 고른 값 → 입력칸에 반영
-    const t = box.querySelector('[data-f="expiry"]'); t.value = e.target.value; it.expiry = e.target.value; t.classList.remove('bad'); return;
+    const t = box.querySelector('[data-f="expiry"]'); t.value = e.target.value; t.dataset.norm = e.target.value; it.expiry = e.target.value; t.classList.remove('bad'); return;
   }
   const f = e.target.dataset.f; if (!f) return;
+  if (f === 'expiry' && e.type === 'input'){      // 기존 날짜 뒤에 붙어 입력되면 새로 입력한 부분만 사용
+    const n = e.target.dataset.norm || '';
+    if (n && e.target.value.length > n.length && e.target.value.startsWith(n)) e.target.value = e.target.value.slice(n.length);
+  }
   it[f] = e.target.value;
   if (f === 'expiry'){
     if (e.type === 'change'){                      // 직접 입력한 날짜는 입력을 마치면 YYYY-MM-DD로 정리
       const p = parseDate(e.target.value);
-      if (p){ e.target.value = p; it.expiry = p; box.querySelector('[data-pick]').value = p; e.target.classList.remove('bad'); }
+      if (p){ e.target.value = p; e.target.dataset.norm = p; it.expiry = p; box.querySelector('[data-pick]').value = p; e.target.classList.remove('bad'); }
       else e.target.classList.toggle('bad', !!e.target.value.trim());
     } else e.target.classList.remove('bad');
   }
 };
+$('rvList').addEventListener('focusin', e => { if (e.target.matches('[data-f="expiry"]')) selectAllSoon(e.target); });
 $('rvList').addEventListener('input', rvEdit);
 $('rvList').addEventListener('change', rvEdit);
 $('rvList').onclick = e => {
