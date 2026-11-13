@@ -209,3 +209,6 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 3. Supabase Auth + RLS 도입 후 `ANALYZE_TOKEN` 제거. (현재 공유코드 `Master`는 약함 → 교체 권장)
 4. 서버 푸시 알림(Asia/Seoul 기준; DB 기본 시간대는 이미 `Asia/Seoul`로 변경함).
 5. Supabase MCP는 `.mcp.json`(Git 제외, features: docs,debugging,functions,database)로 연결됨 — 새 세션에서 함수 배포·로그·SQL을 직접 수행 가능. 비밀값 입력은 사용자가 직접.
+
+### v14 변경 (2026-11-13)
+- 리스트의 **수량(×N)을 탭하면 1씩 차감**. 버튼처럼 보이지 않게 테두리/배경 없이 글자만 두고 터치 영역만 넓힘(18px, 굵게). 수량이 1일 때 탭하면 "다 먹음으로 처리할까요?" 확인 후 `status='done'`. 카드의 다른 부분을 누르면 기존처럼 수정 폼이 열림. 차감은 `updated_at` 갱신 후 동기화.

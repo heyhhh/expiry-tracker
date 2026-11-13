@@ -30,7 +30,7 @@ main{max-width:900px;margin:0 auto;padding:12px 16px;display:grid;gap:10px;grid-
 .dd small{display:block;font-weight:400;font-size:11px;opacity:.9}
 .info{min-width:0;flex:1}.info .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .info .m{font-size:13px;color:var(--sub);margin-top:2px}
-.qty{flex:none;font-size:13px;color:var(--sub)}
+.qty{flex:none;font-size:18px;font-weight:600;color:var(--sub);padding:14px 4px 14px 10px;margin:-14px -4px -14px -10px;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .empty{grid-column:1/-1;text-align:center;color:var(--sub);padding:48px 0}
 .fab{position:fixed;right:20px;bottom:max(20px,env(safe-area-inset-bottom));background:var(--brand);color:#fff;border:0;border-radius:99px;padding:16px 22px;font-size:16px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}
 dialog{border:0;border-radius:18px;padding:0;width:min(520px,94vw);background:var(--card);color:var(--ink);max-height:92vh}
@@ -75,7 +75,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v13</p>
+  <p class="hint" id="verInfo">v14</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -167,11 +167,26 @@ function render(){
   $('list').innerHTML = rows.length ? rows.map(i => { const d = dday(i.expiry);
     return `<div class="card" data-id="${esc(i.id)}"><div class="dd" style="background:${color(d)}">${label(d)}<small>${esc(i.expiry.slice(5))}</small></div>
     <div class="info"><div class="n">${esc(i.name)}</div><div class="m">${esc(i.category||'')}${i.brand?' · '+esc(i.brand):''} · ${esc(i.exp_type||'')}${i.memo?' · '+esc(i.memo):''}</div></div>
-    <div class="qty">×${esc(i.qty)}</div></div>`; }).join('')
+    <div class="qty" data-qty="${esc(i.id)}">×${esc(i.qty)}</div></div>`; }).join('')
     : `<div class="empty">등록된 제품이 없습니다.<br>＋ 버튼으로 제품 사진을 찍어 등록해 보세요.</div>`;
 }
 $('chips').onclick = e => { const c = e.target.dataset.c; if (c){ filter = c; render(); } };
-$('list').onclick = e => { const el = e.target.closest('.card'); if (el) openForm(items.find(i => i.id === el.dataset.id)); };
+function decQty(id){
+  const it = items.find(i => i.id === id); if (!it) return;
+  const n = Number(it.qty) || 1;
+  if (n <= 1){
+    if (confirm(`'${it.name}' 마지막 1개입니다.
+다 먹음으로 처리할까요?`)){
+      items = items.map(i => i.id === id ? {...i, status:'done', updated_at:Date.now()} : i); save(); syncSoon(); toast(`${it.name} — 다 먹음 처리`, 1500);
+    }
+    return;
+  }
+  items = items.map(i => i.id === id ? {...i, qty:n-1, updated_at:Date.now()} : i); save(); syncSoon(); toast(`${it.name} 수량 ${n-1}`, 1200);
+}
+$('list').onclick = e => {
+  const q = e.target.closest('.qty'); if (q){ e.stopPropagation(); return decQty(q.dataset.qty); }
+  const el = e.target.closest('.card'); if (el) openForm(items.find(i => i.id === el.dataset.id));
+};
 
 
 /* ---------- 폼 ---------- */
