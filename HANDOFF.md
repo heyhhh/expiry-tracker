@@ -269,3 +269,9 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 - 알아둘 점: 이미지는 판매자 저작물이며 주소만 저장해 화면에 표시(개인 사용). 검색 결과가 제품과 다를 수 있어 후보 선택/바꾸기를 제공.
 
 **날짜 입력 보완(v19)**: AI가 채운 날짜가 있는 칸을 눌러도 값이 선택되지 않아 새로 입력하면 뒤에 붙어(`2027-03-05270601`) 오류가 나던 문제를 **재현 후 수정**. 칸을 누르면 전체 선택, 선택이 풀려 붙어 입력돼도 기존 값 부분 자동 제거(`dataset.norm`), 입력 중 해석 결과 실시간 표시(`#expHint`: "→ 2027-06-01 (화요일)로 저장됩니다" / "계속 입력하세요… 지금 N자리" / 형식 오류는 빨강). 여러 제품 확인 화면의 날짜 칸도 동일.
+
+## 21. 제품 이미지 검색: NAVER API HUB로 전환 (productimage v9)
+- 사용자가 받은 키는 기존 개발자센터(openapi.naver.com)가 아니라 **NAVER API HUB**(console.ncloud.com) 애플리케이션 키였음(Client ID 10자 `X-NCP-APIGW-API-KEY-ID` / Client Secret 40자 `X-NCP-APIGW-API-KEY`). 기존 호스트로 호출하면 401(024).
+- 함수는 `https://naverapihub.apigw.ntruss.com/search/v1/{shop,image}`를 먼저 호출하고, 실패 시 기존 `openapi.naver.com`으로 대체. 두 종류의 헤더를 모두 전송.
+- 시크릿 ID/Secret이 바뀌어 저장돼도 길이로 자동 교정(ID가 더 길면 맞바꿈).
+- 확인: HUB `shop`은 404(미지원), `image`는 정상(source=`image`, 신라면 검색에 제품 썸네일 포함). 응답에 `tried` 진단 배열이 포함됨.
