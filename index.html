@@ -3,69 +3,152 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#2f7d5b">
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1218" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <title>유통기한 지킴이</title>
 <style>
-:root{--bg:#f7f8fa;--card:#fff;--ink:#1d2433;--sub:#6b7385;--line:#e5e8ee;--brand:#2f7d5b;--brand-ink:#fff;
---red:#d64545;--org:#e08a1e;--grn:#2f7d5b;--gry:#9aa1b0}
-@media(prefers-color-scheme:dark){:root{--bg:#12151c;--card:#1b202a;--ink:#eef1f6;--sub:#98a1b3;--line:#2a3140;--brand:#3fa47a}}
+:root{
+  --bg:#f4f5f7;--surface:#fff;--surface2:#f0f2f5;--ink:#161a23;--sub:#667085;--line:#e6e9ef;
+  --brand:#2f7d5b;--brand-ink:#fff;--brand-soft:rgba(47,125,91,.12);
+  --red:#d92d20;--org:#dc6803;--yel:#a67c00;--grn:#2f7d5b;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 6px 16px rgba(16,24,40,.05);
+  --radius:18px;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0f1218;--surface:#171b24;--surface2:#1f2531;--ink:#eef1f6;--sub:#98a1b3;--line:#262d3b;
+  --brand:#3fa47a;--brand-soft:rgba(63,164,122,.16);
+  --red:#f26a5f;--org:#f5a04a;--yel:#e3b93c;--grn:#4cbf8e;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 16px rgba(0,0,0,.25);
+}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;padding-bottom:96px}
-header{position:sticky;top:0;z-index:5;background:var(--bg);padding:max(12px,env(safe-area-inset-top)) 16px 8px;border-bottom:1px solid var(--line)}
-.top{display:flex;align-items:center;justify-content:space-between;max-width:900px;margin:0 auto}
-h1{font-size:20px;margin:0}
-.iconbtn{background:none;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:6px 10px;font-size:14px;cursor:pointer}
-.summary{display:flex;gap:8px;max-width:900px;margin:10px auto 0}
-.sum{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
-.sum b{display:block;font-size:20px}.sum span{font-size:12px;color:var(--sub)}
-.chips{display:flex;gap:6px;overflow-x:auto;max-width:900px;margin:10px auto 0;padding-bottom:4px;scrollbar-width:none}
-.chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:6px 12px;font-size:14px;cursor:pointer}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;letter-spacing:-.01em}
+button,input,select{font:inherit;color:inherit}
+
+/* ---------- 레이아웃: 폰/태블릿 세로 = 상단 헤더, 태블릿 가로 = 좌측 사이드바 ---------- */
+.side{position:sticky;top:0;z-index:5;background:var(--bg);padding:max(14px,env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line)}
+.side-in{max-width:1100px;margin:0 auto}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:36px;height:36px;border-radius:11px;background:var(--brand);display:grid;place-items:center;font-size:19px;flex:none}
+h1{font-size:19px;margin:0;font-weight:750;letter-spacing:-.03em;white-space:nowrap}
+.actions{display:flex;gap:8px;flex:none}
+.iconbtn{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 11px;font-size:14px;cursor:pointer;box-shadow:var(--shadow)}
+.iconbtn .lbl{display:none}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.sum{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;box-shadow:var(--shadow)}
+.sum b{display:block;font-size:24px;line-height:1.1;font-weight:750;letter-spacing:-.03em}
+.sum span{font-size:12px;color:var(--sub)}
+.chips{display:flex;gap:6px;overflow-x:auto;margin-top:12px;padding-bottom:2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:7px 13px;font-size:14px;cursor:pointer;display:flex;gap:6px;align-items:center;white-space:nowrap}
+.chip em{font-style:normal;font-size:12px;color:var(--sub)}
 .chip.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
-main{max-width:900px;margin:0 auto;padding:12px 16px;display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;gap:12px;align-items:center;cursor:pointer}
-.dd{flex:none;width:62px;text-align:center;border-radius:12px;padding:8px 0;color:#fff;font-weight:700}
-.dd small{display:block;font-weight:400;font-size:11px;opacity:.9}
-.info{min-width:0;flex:1}.info .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.info .m{font-size:13px;color:var(--sub);margin-top:2px}
-.qty{flex:none;font-size:18px;font-weight:600;color:var(--sub);padding:14px 4px 14px 10px;margin:-14px -4px -14px -10px;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
-.empty{grid-column:1/-1;text-align:center;color:var(--sub);padding:48px 0}
-.fab{position:fixed;right:20px;bottom:max(20px,env(safe-area-inset-bottom));background:var(--brand);color:#fff;border:0;border-radius:99px;padding:16px 22px;font-size:16px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}
-dialog{border:0;border-radius:18px;padding:0;width:min(520px,94vw);background:var(--card);color:var(--ink);max-height:92vh}
-dialog::backdrop{background:rgba(0,0,0,.45)}
-.sheet{padding:18px;display:grid;gap:10px}
-.sheet h2{margin:0 0 4px;font-size:18px}
-label{font-size:13px;color:var(--sub);display:grid;gap:4px}
-input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:100%}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chip.on em{color:rgba(255,255,255,.85)}
+
+.content{max-width:1100px;margin:0 auto;padding:14px 16px 120px}
+.toolbar{margin-bottom:12px}
+.search{width:100%;padding:12px 14px 12px 40px;border:1px solid var(--line);border-radius:14px;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 13px center;box-shadow:var(--shadow)}
+#list{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(310px,1fr))}
+
+/* 카드 */
+.card{--tone:var(--grn);--tone-bg:rgba(47,125,91,.12);
+  display:grid;grid-template-columns:48px 1fr auto;gap:13px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);cursor:pointer;transition:transform .08s,box-shadow .15s}
+.card:active{transform:scale(.99)}
+.t-red{--tone:var(--red);--tone-bg:rgba(217,45,32,.12)}
+.t-org{--tone:var(--org);--tone-bg:rgba(220,104,3,.13)}
+.t-yel{--tone:var(--yel);--tone-bg:rgba(166,124,0,.13)}
+.t-grn{--tone:var(--grn);--tone-bg:rgba(47,125,91,.12)}
+.ic{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;font-size:25px;background:var(--tone-bg)}
+.info{min-width:0}
+.n{font-weight:700;font-size:17px;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m{font-size:13px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.right{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.pill{font-size:13px;font-weight:750;padding:3px 10px;border-radius:99px;color:var(--tone);background:var(--tone-bg);white-space:nowrap}
+.pill.solid{background:var(--tone);color:#fff}
+/* 수량: 버튼처럼 보이지 않게 글자만, 터치 영역만 넓게 */
+.qty{font-size:18px;font-weight:650;color:var(--sub);padding:8px 6px 8px 14px;margin:-8px -6px -8px -14px;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.empty{grid-column:1/-1;text-align:center;color:var(--sub);padding:56px 0}
+.empty .big{font-size:44px;margin-bottom:6px}
+
+.fab{position:fixed;right:max(18px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));z-index:6;background:var(--brand);color:#fff;border:0;border-radius:99px;padding:16px 24px;font-size:16px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.28);cursor:pointer}
+
+/* 다이얼로그: 폰 = 하단 시트, 태블릿 = 중앙 카드 */
+dialog{border:0;border-radius:22px;padding:0;width:min(560px,94vw);background:var(--surface);color:var(--ink);max-height:92vh;box-shadow:0 24px 70px rgba(0,0,0,.4)}
+dialog[open]{animation:pop .18s ease-out}
+dialog::backdrop{background:rgba(10,14,22,.5);backdrop-filter:blur(2px)}
+@keyframes pop{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+@media(max-width:600px){dialog{margin:auto 0 0 0;width:100%;max-width:100%;border-radius:24px 24px 0 0;padding-bottom:env(safe-area-inset-bottom)}}
+.sheet{padding:20px;display:grid;gap:12px}
+.sheet h2{margin:0;font-size:19px;font-weight:750;letter-spacing:-.02em}
+label{font-size:13px;color:var(--sub);display:grid;gap:5px}
+input,select{padding:12px;border:1px solid transparent;border-radius:12px;background:var(--surface2);width:100%}
+input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-offset:0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
-.btn{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+.btn{flex:1;padding:13px;border-radius:14px;border:1px solid var(--line);background:var(--surface);font-weight:650;cursor:pointer}
 .btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
 .btn.dng{color:var(--red)}
-.quick{display:flex;gap:6px;flex-wrap:wrap}.quick button{font-size:13px;padding:6px 10px;border-radius:99px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.quick{display:flex;gap:6px;flex-wrap:wrap}
+.quick button{font-size:13px;padding:7px 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface2);cursor:pointer}
+.hint{font-size:12px;color:var(--sub);margin:0}
 .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
-.thumb{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--bg)}
+.thumb{position:relative;aspect-ratio:1;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--surface2)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb button{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:99px;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:16px;line-height:1;cursor:pointer}
-.btn[disabled]{opacity:.45;cursor:not-allowed}
-.hint{font-size:12px;color:var(--sub)}
-.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;display:none;z-index:20}
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#20242c;color:#fff;padding:11px 18px;border-radius:99px;font-size:14px;display:none;z-index:50;max-width:90vw;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+
+/* 태블릿 세로(≥700px): 글자/여백 약간 키움 */
+@media(min-width:700px){
+  body{font-size:17px}
+  .side,.content{padding-left:28px;padding-right:28px}
+  .iconbtn .lbl{display:inline}
+  #list{gap:14px;grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
+  .card{padding:16px}
+  .n{font-size:18px}.m{font-size:14px}
+}
+/* 태블릿 가로 / 데스크톱(≥1000px): 좌측 고정 사이드바 + 오른쪽 목록 */
+@media(min-width:1000px){
+  .app{display:grid;grid-template-columns:290px 1fr;align-items:start}
+  .side{height:100vh;border-bottom:0;border-right:1px solid var(--line);padding:28px 22px;overflow:auto}
+  .side-in{max-width:none}
+  .top{flex-direction:column;align-items:stretch;gap:14px}
+  .actions .iconbtn{flex:1}
+  .chips{flex-direction:column;overflow:visible;margin-top:20px;gap:6px}
+  .chip{border-radius:13px;justify-content:space-between;padding:10px 14px}
+  .content{max-width:none;margin:0;padding:28px 24px 120px}
+  #list{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+}
+/* 폰 가로처럼 높이가 낮을 때는 헤더 고정 해제 */
+@media(max-height:520px) and (max-width:999px){.side{position:static}}
 </style>
 </head>
 <body>
-<header>
-  <div class="top"><h1>🥫 유통기한 지킴이</h1>
-    <div><button class="iconbtn" id="btnSync">⟳ 동기화</button> <button class="iconbtn" id="btnSet">⚙</button></div></div>
-  <div class="summary">
-    <div class="sum"><b id="sExp" style="color:var(--red)">0</b><span>만료/오늘</span></div>
-    <div class="sum"><b id="sSoon" style="color:var(--org)">0</b><span>3일 이내</span></div>
-    <div class="sum"><b id="sAll">0</b><span>보관 중</span></div>
+<div class="app">
+  <aside class="side"><div class="side-in">
+    <div class="top">
+      <div class="brand"><div class="logo">🥫</div><h1>유통기한 지킴이</h1></div>
+      <div class="actions">
+        <button class="iconbtn" id="btnSync" aria-label="동기화">⟳<span class="lbl"> 동기화</span></button>
+        <button class="iconbtn" id="btnSet" aria-label="설정">⚙<span class="lbl"> 설정</span></button>
+      </div>
+    </div>
+    <div class="summary">
+      <div class="sum"><b id="sExp" style="color:var(--red)">0</b><span>만료/오늘</span></div>
+      <div class="sum"><b id="sSoon" style="color:var(--org)">0</b><span>3일 이내</span></div>
+      <div class="sum"><b id="sAll">0</b><span>보관 중</span></div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div></aside>
+  <div class="content">
+    <div class="toolbar"><input class="search" id="search" type="search" placeholder="제품 검색 (이름·브랜드·메모)" autocomplete="off"></div>
+    <main id="list"></main>
   </div>
-  <div class="chips" id="chips"></div>
-</header>
-<main id="list"></main>
+</div>
 <button class="fab" id="btnAdd">＋ 제품 추가</button>
 <div class="toast" id="toast"></div>
 
@@ -75,7 +158,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v14</p>
+  <p class="hint" id="verInfo">v15</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -83,7 +166,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <h2>제품 사진 AI 분석</h2>
   <p class="hint">제품 앞면, 기한이 인쇄된 면 등을 <b>최대 5장</b>까지 찍을 수 있어요. 1장만 찍고 바로 분석해도 됩니다.</p>
   <div class="thumbs" id="thumbs"></div>
-  <div class="btns"><label class="btn" id="addPhotoLbl" style="text-align:center;cursor:pointer">📸 사진 찍기<input type="file" id="photoInput" accept="image/*" capture="environment" hidden></label></div>
+  <div class="btns"><label class="btn" id="addPhotoLbl" style="text-align:center;cursor:pointer;color:var(--ink)">📸 사진 찍기<input type="file" id="photoInput" accept="image/*" capture="environment" hidden></label></div>
   <div class="btns"><button class="btn pri" id="doAnalyze" disabled>🤖 분석하기</button><button class="btn" id="photosClose">닫기</button></div>
   <p class="hint">사진에는 포장만 나오게 찍어 주세요. 사진은 AI 분석에만 쓰이고 저장되지 않습니다.</p>
 </div></dialog>
@@ -102,7 +185,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   </div>
   <p class="hint" id="aiNote" style="display:none;color:var(--org)">🤖 AI가 읽은 값입니다. 특히 <b>기한 날짜는 포장과 꼭 대조</b>하세요.</p>
   <div class="quick" id="quick"></div>
-  <label>수량<input type="number" id="fQty" min="1" value="1"></label>
+  <label>수량<input type="number" id="fQty" min="1" value="1" inputmode="numeric"></label>
   <label>메모<input id="fMemo" placeholder="냉장/냉동, 개봉일 등"></label>
   <div class="btns">
     <button type="submit" class="btn pri" id="fSave">저장</button>
@@ -112,6 +195,13 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   </div>
 </form></dialog>
 
+<!-- 확인 (브라우저 기본 confirm 대신 앱 안에서 표시) -->
+<dialog id="dConfirm"><div class="sheet">
+  <h2 id="cTitle"></h2>
+  <p id="cMsg" style="margin:0;color:var(--sub)"></p>
+  <div class="btns"><button class="btn" id="cNo">취소</button><button class="btn pri" id="cYes">확인</button></div>
+</div></dialog>
+
 <!-- 설정 -->
 <dialog id="dSet"><div class="sheet">
   <h2>설정 / 기기 간 동기화</h2>
@@ -120,7 +210,7 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
   <label>Supabase anon key<input id="sbKey"></label>
   <label>공유 코드 (길고 추측 어렵게)<input id="sbHh" placeholder="예: kim-family-7f3a9c2e"></label>
   <label>AI 분석 토큰 (제품 사진 분석용)<input id="aiTok" placeholder="Supabase 시크릿 ANALYZE_TOKEN과 같은 값"></label>
-  <label>알림 기준 (일 전)<input id="notiDays" value="3" type="number" min="0"></label>
+  <label>알림 기준 (일 전)<input id="notiDays" value="3" type="number" min="0" inputmode="numeric"></label>
   <div class="btns"><button class="btn" id="copyLink">🔗 설정 링크 복사</button></div>
   <p class="hint">링크를 북마크해 두면 데이터를 지워도 링크를 열기만 하면 공유 코드가 복원됩니다. 링크에 공유 코드(와 AI 토큰)가 들어 있으니 남에게 보내지 마세요.</p>
   <div class="btns"><button class="btn" id="notiPerm">알림 권한 허용</button><button class="btn pri" id="setSave">저장</button><button class="btn" id="setClose">닫기</button></div>
@@ -131,6 +221,8 @@ input,select,textarea{font:inherit;padding:10px;border:1px solid var(--line);bor
 <script>
 const $ = id => document.getElementById(id);
 const CATS = ['유제품','육류','수산물','채소/과일','음료','과자/간식','냉동식품','가공식품','소스/양념','기타'];
+const ICONS = {'유제품':'🥛','육류':'🥩','수산물':'🐟','채소/과일':'🥬','음료':'🥤','과자/간식':'🍪','냉동식품':'🧊','가공식품':'🥫','소스/양념':'🧂','기타':'📦'};
+const DOW = ['일','월','화','수','목','금','토'];
 const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
@@ -140,19 +232,31 @@ let items = store.get('items', []);
 const DEFAULTS = {sbUrl:'https://nnrzjgsjwgykafawtimt.supabase.co', sbKey:'sb_publishable_vfmo-2H6jIbNlx6FCezYkw_5ohw1y0n', hh:'', aiToken:'', notiDays:3};
 let cfg = {...DEFAULTS, ...store.get('cfg', {})};
 if (!cfg.sbUrl) cfg.sbUrl = DEFAULTS.sbUrl; if (!cfg.sbKey) cfg.sbKey = DEFAULTS.sbKey;
-// 설정 링크(#h=공유코드)로 열면 공유 코드를 자동 복원
+// 설정 링크(#h=공유코드&t=AI토큰)로 열면 자동 복원
 try{ const m = location.hash.match(/[#&]h=([^&]+)/), t = location.hash.match(/[#&]t=([^&]+)/); if (m || t){ if (m) cfg.hh = decodeURIComponent(m[1]); if (t) cfg.aiToken = decodeURIComponent(t[1]); store.set('cfg', cfg); history.replaceState(null, '', location.pathname + location.search); } }catch{}
-let filter = '전체', editing = null, sb = null;
+let filter = '전체', q = '', editing = null, sb = null;
 
 const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
 const dday = s => Math.round((new Date(s+'T00:00:00') - today())/864e5);
 const fmt = d => { const z = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; };
+const fmtShort = s => { const d = new Date(s+'T00:00:00'); return `${d.getMonth()+1}.${d.getDate()}(${DOW[d.getDay()]})`; };
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random().toString(16).slice(2));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(t, ms=2200){ const e=$('toast'); e.textContent=t; e.style.display='block'; clearTimeout(toast.t); toast.t=setTimeout(()=>e.style.display='none',ms); }
 
+// 앱 안에서 보여주는 확인 창 (일부 폰 브라우저는 기본 confirm()을 막거나 표시하지 않음)
+function askConfirm(title, msg, okLabel = '확인'){
+  return new Promise(res => {
+    const d = $('dConfirm');
+    $('cTitle').textContent = title; $('cMsg').textContent = msg; $('cYes').textContent = okLabel;
+    const done = v => { d.onclose = null; if (d.open) d.close(); res(v); };
+    $('cYes').onclick = () => done(true); $('cNo').onclick = () => done(false); d.onclose = () => done(false);
+    d.showModal();
+  });
+}
+
 function save(){ store.set('items', items); render(); }
-function color(d){ return d < 0 ? 'var(--red)' : d <= 1 ? 'var(--red)' : d <= 3 ? 'var(--org)' : d <= 7 ? '#c9a21a' : 'var(--grn)'; }
+function tone(d){ return d <= 1 ? 't-red' : d <= 3 ? 't-org' : d <= 7 ? 't-yel' : 't-grn'; }
 function label(d){ return d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`; }
 
 function render(){
@@ -162,29 +266,38 @@ function render(){
   $('sAll').textContent = active.length;
   const cats = ['전체', ...CATS.filter(c => active.some(i => i.category === c))];
   if (!cats.includes(filter)) filter = '전체';
-  $('chips').innerHTML = cats.map(c => `<button class="chip ${c===filter?'on':''}" data-c="${esc(c)}">${esc(c)}</button>`).join('');
-  const rows = active.filter(i => filter === '전체' || i.category === filter).sort((a,b) => a.expiry.localeCompare(b.expiry));
+  const count = c => c === '전체' ? active.length : active.filter(i => i.category === c).length;
+  $('chips').innerHTML = cats.map(c => `<button class="chip ${c===filter?'on':''}" data-c="${esc(c)}">${c==='전체'?'':(ICONS[c]||'')+' '}${esc(c)} <em>${count(c)}</em></button>`).join('');
+  const rows = active
+    .filter(i => filter === '전체' || i.category === filter)
+    .filter(i => !q || [i.name, i.brand, i.memo, i.category].some(v => String(v||'').toLowerCase().includes(q)))
+    .sort((a,b) => a.expiry.localeCompare(b.expiry));
   $('list').innerHTML = rows.length ? rows.map(i => { const d = dday(i.expiry);
-    return `<div class="card" data-id="${esc(i.id)}"><div class="dd" style="background:${color(d)}">${label(d)}<small>${esc(i.expiry.slice(5))}</small></div>
-    <div class="info"><div class="n">${esc(i.name)}</div><div class="m">${esc(i.category||'')}${i.brand?' · '+esc(i.brand):''} · ${esc(i.exp_type||'')}${i.memo?' · '+esc(i.memo):''}</div></div>
-    <div class="qty" data-qty="${esc(i.id)}">×${esc(i.qty)}</div></div>`; }).join('')
-    : `<div class="empty">등록된 제품이 없습니다.<br>＋ 버튼으로 제품 사진을 찍어 등록해 보세요.</div>`;
+    return `<div class="card ${tone(d)}" data-id="${esc(i.id)}">
+      <div class="ic" aria-hidden="true">${ICONS[i.category]||'📦'}</div>
+      <div class="info"><div class="n">${esc(i.name)}</div>
+        <div class="m">${esc([i.brand, i.category].filter(Boolean).join(' · '))}</div>
+        <div class="m">${esc(i.exp_type||'')} ${fmtShort(i.expiry)}${i.memo?' · '+esc(i.memo):''}</div></div>
+      <div class="right"><span class="pill ${d<=0?'solid':''}">${label(d)}</span><div class="qty" data-qty="${esc(i.id)}">×${esc(i.qty)}</div></div>
+    </div>`; }).join('')
+    : (q || filter !== '전체'
+        ? `<div class="empty"><div class="big">🔍</div>조건에 맞는 제품이 없습니다.</div>`
+        : `<div class="empty"><div class="big">🥫</div>등록된 제품이 없습니다.<br>＋ 버튼으로 제품 사진을 찍어 등록해 보세요.</div>`);
 }
-$('chips').onclick = e => { const c = e.target.dataset.c; if (c){ filter = c; render(); } };
-function decQty(id){
+$('chips').onclick = e => { const b = e.target.closest('.chip'); if (b){ filter = b.dataset.c; render(); } };
+$('search').oninput = e => { q = e.target.value.trim().toLowerCase(); render(); };
+async function decQty(id){
   const it = items.find(i => i.id === id); if (!it) return;
   const n = Number(it.qty) || 1;
   if (n <= 1){
-    if (confirm(`'${it.name}' 마지막 1개입니다.
-다 먹음으로 처리할까요?`)){
-      items = items.map(i => i.id === id ? {...i, status:'done', updated_at:Date.now()} : i); save(); syncSoon(); toast(`${it.name} — 다 먹음 처리`, 1500);
-    }
+    const ok = await askConfirm('마지막 1개예요', `'${it.name}'을(를) 다 먹음으로 처리할까요?`, '다 먹음');
+    if (ok){ items = items.map(i => i.id === id ? {...i, status:'done', updated_at:Date.now()} : i); save(); syncSoon(); toast(`${it.name} — 다 먹음 처리`, 1500); }
     return;
   }
   items = items.map(i => i.id === id ? {...i, qty:n-1, updated_at:Date.now()} : i); save(); syncSoon(); toast(`${it.name} 수량 ${n-1}`, 1200);
 }
 $('list').onclick = e => {
-  const q = e.target.closest('.qty'); if (q){ e.stopPropagation(); return decQty(q.dataset.qty); }
+  const qEl = e.target.closest('.qty'); if (qEl){ e.stopPropagation(); return decQty(qEl.dataset.qty); }
   const el = e.target.closest('.card'); if (el) openForm(items.find(i => i.id === el.dataset.id));
 };
 
@@ -313,7 +426,7 @@ $('doAnalyze').onclick = async () => {
 function initSb(){
   sb = null;
   if (cfg.sbUrl && cfg.sbKey && cfg.hh && window.supabase) { try{ sb = supabase.createClient(cfg.sbUrl, cfg.sbKey); }catch{} }
-  $('btnSync').style.opacity = sb ? 1 : .4;
+  $('btnSync').style.opacity = sb ? 1 : .45;
 }
 let syncTimer; const syncSoon = () => { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 600); };
 async function sync(manual){
