@@ -189,7 +189,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v23</p>
+  <p class="hint" id="verInfo">v24</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -276,6 +276,8 @@ input.bad{outline:2px solid var(--red)}
     <label>초대 코드<div class="codebox"><input id="acCode" readonly><button type="button" class="btn sm" id="copyCode">복사</button></div></label>
     <p class="hint">같은 리스트를 함께 쓸 가족에게 이 코드를 알려 주세요. 가족이 가입한 뒤 "초대 코드로 참여"에 입력하면 같은 제품 목록을 보게 됩니다. 코드를 모르는 사람은 목록을 볼 수 없어요.</p>
   </div>
+  <div class="btns"><button class="btn" id="btnExport">📥 엑셀로 내보내기</button><button class="btn" id="btnImport">📤 엑셀에서 가져오기</button><input type="file" id="impFile" accept=".xlsx,.xls,.csv" hidden></div>
+  <p class="hint">현재 리스트의 제품을 엑셀(.xlsx) 파일로 저장합니다. 보관 중 제품과 처리된(다 먹음·폐기) 제품이 시트로 나뉩니다. 가져오기는 이 내보내기 양식(제품명·브랜드·카테고리·기한 종류·기한 날짜·수량·메모)의 파일을 읽으며, 이미 같은 제품이 있으면 건너뜁니다.</p>
   <label>알림 기준 (일 전)<input id="notiDays" value="3" type="number" min="0" inputmode="numeric"></label>
   <div class="btns"><button class="btn" id="notiPerm">알림 권한 허용</button><button class="btn pri" id="setSave">저장</button></div>
   <div class="btns"><button class="btn" id="btnLeave">리스트 나가기</button><button class="btn" id="btnLogout">로그아웃</button><button class="btn" id="setClose">닫기</button></div>
@@ -308,6 +310,7 @@ input.bad{outline:2px solid var(--red)}
 </div></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const CATS = ['유제품','육류','수산물','채소/과일','음료','과자/간식','냉동식품','가공식품','소스/양념','의약품','건강기능식품','화장품','생활용품','기타'];
@@ -895,6 +898,90 @@ $('btnSet').onclick = () => {
 };
 $('setClose').onclick = () => $('dSet').close();
 $('setSave').onclick = () => { cfg = {...cfg, notiDays:Number($('notiDays').value)||0}; store.set('cfg', cfg); $('dSet').close(); toast('저장됨'); };
+/* ---------- 엑셀 내보내기 ---------- */
+function exportRows(list){
+  return list.map(i => {
+    const has = hasExp(i);
+    return {'제품명':i.name||'', '브랜드':i.brand||'', '카테고리':i.category||'', '기한 종류':i.exp_type||'', '기한 날짜':has ? i.expiry : '',
+      '남은 일수':has ? dday(i.expiry) : '', '수량':Number(i.qty)||1, '메모':i.memo||''};
+  });
+}
+function exportXlsx(){
+  const live = items.filter(i => !i.deleted);
+  if (!live.length) return toast('내보낼 제품이 없습니다');
+  const active = live.filter(i => i.status === 'active').sort((a,b) => (a.expiry||'9999').localeCompare(b.expiry||'9999'));
+  const closed = live.filter(i => i.status !== 'active').map(i => ({...i}));
+  const name = `유통기한_목록_${fmt(today())}`;
+  const cols = [{wch:24},{wch:14},{wch:12},{wch:10},{wch:12},{wch:9},{wch:6},{wch:24}];
+  if (window.XLSX){
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.json_to_sheet(exportRows(active)); ws1['!cols'] = cols; XLSX.utils.book_append_sheet(wb, ws1, '보관 중');
+    if (closed.length){
+      const rows = closed.map(i => ({...exportRows([i])[0], '처리':i.status === 'done' ? '다 먹음' : '폐기'}));
+      const ws2 = XLSX.utils.json_to_sheet(rows); ws2['!cols'] = [...cols, {wch:8}]; XLSX.utils.book_append_sheet(wb, ws2, '처리됨');
+    }
+    XLSX.writeFile(wb, name + '.xlsx');
+    return toast('엑셀 파일을 저장했어요', 3000);
+  }
+  // 엑셀 라이브러리를 못 불러온 경우: CSV(엑셀에서 열림, 한글 깨짐 방지 BOM)
+  const rows = exportRows(active), keys = Object.keys(rows[0] || {'제품명':''});
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = String.fromCharCode(0xFEFF) + [keys.map(q).join(','), ...rows.map(r => keys.map(k => q(r[k])).join(','))].join(String.fromCharCode(13, 10));
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'})); a.download = name + '.csv';
+  document.body.appendChild(a); a.click(); a.remove(); toast('CSV 파일을 저장했어요 (엑셀에서 열 수 있어요)', 3500);
+}
+$('btnExport').onclick = exportXlsx;
+
+/* ---------- 엑셀 가져오기 (내보내기 양식) ---------- */
+// 엑셀에서 날짜 셀로 바꿔 저장했을 때(숫자 일련번호/Date)도 읽음
+function cellDate(v){
+  if (v instanceof Date && !isNaN(v)) return fmt(new Date(v.getFullYear(), v.getMonth(), v.getDate()));
+  if (typeof v === 'number' && v > 20000 && v < 80000 && window.XLSX){ const d = XLSX.SSF.parse_date_code(v); if (d) return fmt(new Date(d.y, d.m - 1, d.d)); }
+  return parseDate(v);
+}
+function parseImport(wb){
+  const out = {recs:[], dup:0, bad:[], found:false};
+  const keyOf = i => [i.name.trim().toLowerCase(), (i.brand||'').trim().toLowerCase(), i.expiry||'', i.status].join('|');
+  const seen = new Set(items.filter(i => !i.deleted).map(keyOf));
+  const now = Date.now();
+  for (const sn of wb.SheetNames){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {defval:'', raw:true});
+    if (!rows.length || !('제품명' in rows[0])) continue;
+    out.found = true;
+    rows.forEach((r, idx) => {
+      const name = String(r['제품명'] ?? '').trim(); if (!name) return;
+      let type = String(r['기한 종류'] ?? '').trim(); const rawDate = r['기한 날짜'];
+      const hasRaw = rawDate !== '' && rawDate != null && String(rawDate).trim() !== '';
+      let exp = hasRaw ? cellDate(rawDate) : '';
+      if (hasRaw && !exp){ out.bad.push(`${sn} ${idx + 2}행 (${name}): 기한 날짜를 읽을 수 없음`); return; }
+      if (!EXP_TYPES.includes(type)) type = exp ? '소비기한' : NOEXP;
+      if (type === NOEXP) exp = '';
+      if (type !== NOEXP && !exp){ out.bad.push(`${sn} ${idx + 2}행 (${name}): 기한 날짜가 없음`); return; }
+      const cat = CATS.includes(String(r['카테고리']).trim()) ? String(r['카테고리']).trim() : '기타';
+      const st = String(r['처리'] ?? '').trim();
+      const status = st === '다 먹음' ? 'done' : st === '폐기' ? 'discarded' : 'active';
+      const rec = {id:uid(), name:name.slice(0, 60), brand:String(r['브랜드'] ?? '').trim().slice(0, 40), category:cat, exp_type:type, expiry:exp || null,
+        qty:Math.max(1, Math.floor(Number(r['수량'])) || 1), barcode:null, photo:null, memo:String(r['메모'] ?? '').trim().slice(0, 100), status, deleted:false, updated_at:now + out.recs.length};
+      { const k = keyOf({...rec, expiry:exp}); if (seen.has(k)){ out.dup++; return; } seen.add(k); }
+      out.recs.push(rec);
+    });
+  }
+  return out;
+}
+$('btnImport').onclick = () => { if (!window.XLSX) return toast('엑셀 라이브러리를 불러오지 못했습니다. 새로고침해 주세요.', 3500); $('impFile').click(); };
+$('impFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try{
+    if (f.size > 5 * 1024 * 1024) return toast('파일이 너무 큽니다 (5MB 이하)', 3500);
+    const wb = XLSX.read(await f.arrayBuffer(), {type:'array', cellDates:true});
+    const r = parseImport(wb);
+    if (!r.found) return toast('양식이 맞지 않습니다. "제품명" 열이 있는 내보내기 파일을 선택해 주세요.', 4500);
+    if (!r.recs.length) return toast(r.dup ? `새로 추가할 제품이 없습니다 (중복 ${r.dup}개)` : '가져올 제품이 없습니다', 3500);
+    const msg = `새로 ${r.recs.length}개를 추가합니다.` + (r.dup ? ` 이미 있는 ${r.dup}개는 건너뜁니다.` : '') + (r.bad.length ? ` 읽을 수 없는 ${r.bad.length}행은 제외합니다. (${r.bad.slice(0, 2).join(' / ')})` : '');
+    if (!await askConfirm('엑셀에서 가져올까요?', msg, '가져오기')) return;
+    items = [...items, ...r.recs]; save(); syncSoon(); toast(`${r.recs.length}개 제품을 가져왔어요`, 3500);
+  }catch(err){ console.error(err); toast('파일을 읽지 못했습니다. 내보내기 한 .xlsx/.csv 파일인지 확인해 주세요.', 4500); }
+};
 $('copyCode').onclick = async () => { try{ await navigator.clipboard.writeText($('acCode').value); toast('초대 코드를 복사했어요'); }catch{ $('acCode').select(); toast('코드를 길게 눌러 복사하세요'); } };
 $('btnLogout').onclick = async () => { if (await askConfirm('로그아웃할까요?', '이 기기에 저장된 제품 목록은 지워지고, 다시 로그인하면 서버에서 불러옵니다.', '로그아웃')) { $('dSet').close(); logout(); } };
 $('btnLeave').onclick = async () => {
