@@ -195,7 +195,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v28</p>
+  <p class="hint" id="verInfo">v29</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -287,10 +287,26 @@ input.bad{outline:2px solid var(--red)}
   <p class="hint">알림은 앱을 열었을 때 만료 임박 제품을 알려줍니다.</p>
   <div class="btns"><button class="btn" id="btnLeave">그룹 나가기</button><button class="btn" id="btnLogout">로그아웃</button><button class="btn" id="setClose">닫기</button></div>
   <hr class="sep">
+  <div class="btns"><button class="btn" id="btnHist">📜 처리 기록</button><button class="btn" id="btnLogs">📋 활동 로그</button></div>
+  <p class="hint">수량이 0이 되어 처리한 제품의 기록과, 등록·수정·수량 변경·오류 로그를 볼 수 있어요.</p>
   <div class="btns"><button class="btn" id="btnBackup">☁ 지금 백업</button><button class="btn" id="btnRestore">↩ 백업에서 복원</button></div>
   <p class="hint" id="bkInfo">서버에 목록 사본을 저장합니다. 하루에 한 번 자동으로도 백업되고, 최근 150개를 보관해요.</p>
   <div class="btns"><button class="btn" id="btnExport">📥 엑셀로 내보내기</button><button class="btn" id="btnImport">📤 엑셀에서 가져오기</button><input type="file" id="impFile" accept=".xlsx,.xls,.csv" hidden></div>
   <p class="hint">엑셀(.xlsx)로 저장하거나, 그 양식의 파일을 가져옵니다. 이미 있는 제품은 건너뜁니다.</p>
+</div></dialog>
+
+<!-- 처리 기록 -->
+<dialog id="dHist"><div class="sheet">
+  <div class="sethead"><h2>처리 기록</h2><button type="button" class="xbtn" id="histX" aria-label="닫기">✕</button></div>
+  <p class="hint">수량이 0이 되어(다 먹음·폐기) 메인 목록에서 빠진 제품의 기록입니다. 우리 그룹 멤버만 볼 수 있어요.</p>
+  <div id="histList" class="bklist"></div>
+</div></dialog>
+
+<!-- 활동 로그 -->
+<dialog id="dLog"><div class="sheet">
+  <div class="sethead"><h2>활동 로그</h2><button type="button" class="xbtn" id="logX" aria-label="닫기">✕</button></div>
+  <div class="seg"><button type="button" class="chip on" id="logAll">전체</button><button type="button" class="chip" id="logErr">오류만</button></div>
+  <div id="logList" class="bklist"></div>
 </div></dialog>
 
 <!-- 백업에서 복원 -->
@@ -350,7 +366,7 @@ const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
 const hasExp = i => !!(i && i.expiry);
 const dday = s => Math.round((new Date(s+'T00:00:00') - today())/864e5);
 const fmt = d => { const z = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; };
-const fmtShort = s => { const d = new Date(s+'T00:00:00'); return `${d.getMonth()+1}.${d.getDate()}(${DOW[d.getDay()]})`; };
+const fmtShort = s => { const d = new Date(s+'T00:00:00'); return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}(${DOW[d.getDay()]})`; };
 // 직접 입력한 날짜를 해석: 2027-03-05 / 2027.3.5 / 20270305 / 27.03.05 / 270305 / 2027년 3월 5일 → 'YYYY-MM-DD' (잘못된 값은 null, 빈 값은 '')
 function parseDate(str){
   if (str == null || !String(str).trim()) return '';
@@ -385,6 +401,32 @@ function askConfirm(title, msg, okLabel = '확인'){
 
 // 이미지(외부 주소 또는 내 사진 썸네일). 불러오지 못하면 카테고리 이모지로 대체
 const imgHtml = (url, emoji) => `<img src="${esc(url)}" alt="" referrerpolicy="no-referrer" loading="lazy" data-e="${esc(emoji)}" onerror="this.replaceWith(document.createTextNode(this.dataset.e))">`;
+/* ---------- 활동/오류 로그 (오프라인이면 큐에 모았다가 서버 `app_logs`로 전송) ---------- */
+const LOGQ = 'logq';
+const whoAmI = () => { try{ return ((session && session.user && session.user.email) || '').split('@')[0].slice(0, 12); }catch{ return ''; } };
+const devShort = () => { const u = navigator.userAgent; return /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? (/Mobile/.test(u) ? 'Android폰' : 'Android태블릿') : /Windows/.test(u) ? 'Windows' : /Mac/.test(u) ? 'Mac' : '기타'; };
+let logTimer, jsErrCount = 0;
+function logEvent(action, detail = {}, level = 'info'){
+  try{
+    const q = store.get(LOGQ, []);
+    q.push({action, level, detail, at:Date.now(), who:whoAmI(), device:devShort()});
+    store.set(LOGQ, q.slice(-300)); clearTimeout(logTimer); logTimer = setTimeout(flushLogs, 3000);
+  }catch{}
+}
+async function flushLogs(){
+  try{
+    if (typeof sb === 'undefined' || !sb || typeof hh === 'undefined' || !hh) return;
+    const q = store.get(LOGQ, []); if (!q.length) return;
+    const part = q.slice(0, 100);
+    const {error} = await sb.from('app_logs').insert(part.map(e => ({household:hh.id, level:e.level, action:e.action, detail:{...e.detail, who:e.who}, device:e.device, created_at:new Date(e.at).toISOString()})));
+    if (error) return;                               // 테이블이 없거나 오프라인이면 큐에 남겨 둠 (다음에 재시도)
+    store.set(LOGQ, store.get(LOGQ, []).slice(part.length));
+    if (q.length > part.length) logTimer = setTimeout(flushLogs, 1000);
+  }catch{}
+}
+window.addEventListener('error', e => { if (++jsErrCount <= 20) logEvent('js_error', {msg:String(e.message || '').slice(0, 160), src:String(e.filename || '').split('/').pop(), line:e.lineno}, 'error'); });
+window.addEventListener('unhandledrejection', e => { if (++jsErrCount <= 20) logEvent('js_error', {msg:String((e.reason && e.reason.message) || e.reason || '').slice(0, 160), kind:'promise'}, 'error'); });
+
 function save(){ store.set('items', items); render(); }
 function tone(d){ return d <= 1 ? 't-red' : d <= 3 ? 't-org' : d <= 7 ? 't-yel' : 't-grn'; }
 function label(d){ return d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`; }
@@ -421,10 +463,10 @@ async function decQty(id){
   const n = Number(it.qty) || 1;
   if (n <= 1){
     const ok = await askConfirm('마지막 1개예요', `'${it.name}'을(를) 다 먹음으로 처리할까요?`, '다 먹음');
-    if (ok){ items = items.map(i => i.id === id ? {...i, status:'done', updated_at:Date.now()} : i); save(); syncSoon(); toast(`${it.name} — 다 먹음 처리`, 1500); }
+    if (ok){ items = items.map(i => i.id === id ? {...i, status:'done', updated_at:Date.now()} : i); save(); syncSoon(); logEvent('item_done', {id, name:it.name, reason:'수량 0 (탭)'}); toast(`${it.name} — 다 먹음 처리`, 1500); }
     return;
   }
-  items = items.map(i => i.id === id ? {...i, qty:n-1, updated_at:Date.now()} : i); save(); syncSoon(); toast(`${it.name} 수량 ${n-1}`, 1200);
+  items = items.map(i => i.id === id ? {...i, qty:n-1, updated_at:Date.now()} : i); save(); syncSoon(); logEvent('qty_down', {id, name:it.name, from:n, to:n-1}); toast(`${it.name} 수량 ${n-1}`, 1200);
 }
 $('list').onclick = e => {
   const qEl = e.target.closest('.qty'); if (qEl){ e.stopPropagation(); return decQty(qEl.dataset.qty); }
@@ -582,10 +624,15 @@ $('form').onsubmit = e => {
     memo:$('fMemo').value.trim(), status: editing?.status || 'active', deleted:false, updated_at:Date.now()
   };
   if (!rec.name || (!none && !rec.expiry)) return;
+  if (editing){
+    const ch = {}; for (const k of ['name','brand','category','exp_type','expiry','qty','memo']) if (String(editing[k] ?? '') !== String(rec[k] ?? '')) ch[k] = {from:editing[k] ?? '', to:rec[k] ?? ''};
+    if (Object.keys(ch).length) logEvent('item_update', {id:rec.id, name:rec.name, changes:ch});
+    if (ch.qty) logEvent(Number(rec.qty) > Number(editing.qty) ? 'qty_up' : 'qty_down', {id:rec.id, name:rec.name, from:Number(editing.qty), to:Number(rec.qty)});
+  } else logEvent('item_add', {id:rec.id, name:rec.name, category:rec.category, expiry:rec.expiry || '확인불가', qty:rec.qty, via:'form'});
   items = editing ? items.map(i => i.id === rec.id ? rec : i) : [...items, rec];
   clearFormDraft(); $('dForm').close(); save(); toast('저장됨'); syncSoon();
 };
-function setStatus(s){ if (!editing) return; items = items.map(i => i.id === editing.id ? {...i, status:s, updated_at:Date.now()} : i); clearFormDraft(); $('dForm').close(); save(); syncSoon(); }
+function setStatus(s){ if (!editing) return; logEvent(s === 'done' ? 'item_done' : 'item_discarded', {id:editing.id, name:editing.name, reason:'수정 화면'}); items = items.map(i => i.id === editing.id ? {...i, status:s, updated_at:Date.now()} : i); clearFormDraft(); $('dForm').close(); save(); syncSoon(); }
 $('fDone').onclick = () => setStatus('done');
 $('fDiscard').onclick = () => setStatus('discarded');
 
@@ -699,6 +746,7 @@ $('doAnalyze').onclick = async () => {
   try{
     const src = photos.slice();
     const res = await callAnalyze(src);
+    logEvent('analyze_ok', {photos:src.length, found:(res.items || []).length});
     const list = (Array.isArray(res.items) && res.items.length) ? res.items : [res.data];
     clearPhotoDraft(); $('dPhotos').close();
     if (list.length > 1){
@@ -715,6 +763,7 @@ $('doAnalyze').onclick = async () => {
     }
   }catch(e){
     renderThumbs();
+    logEvent('analyze_error', {msg:String(e.message || e).slice(0, 120)}, 'error');
     toast(e.message === 'token' ? '로그인이 만료되었습니다. ⚙ 설정에서 로그아웃 후 다시 로그인해 주세요.' : 'AI 분석에 실패했습니다. (무료 모델 한도 초과일 수 있어요) 다시 시도하거나 수동 등록을 이용하세요.', 5000);
   }
 };
@@ -795,7 +844,7 @@ $('rvSave').onclick = () => {
   const now = Date.now();
   const recs = reviewItems.map((it, k) => ({id:uid(), name:it.name.trim(), brand:it.brand.trim(), category:it.category,
     exp_type:it.exp_type, expiry:it.exp_type === NOEXP ? null : parseDate(it.expiry), qty:Number(it.qty)||1, barcode:null, photo:it.photo||null, memo:'', status:'active', deleted:false, updated_at:now+k}));
-  items = [...items, ...recs]; $('dReview').close(); save(); syncSoon(); toast(`${recs.length}개 제품을 등록했습니다`);
+  items = [...items, ...recs]; $('dReview').close(); save(); syncSoon(); logEvent('item_add_bulk', {count:recs.length, names:recs.map(r => r.name).slice(0, 10), via:'photo'}); toast(`${recs.length}개 제품을 등록했습니다`);
 };
 
 /* ---------- 동기화 (Supabase) ---------- */
@@ -823,8 +872,9 @@ async function sync(manual){
     for (const [id, r] of remote){ const l = local.get(id); if (!l || r.updated_at > l.updated_at){ const {household, ...rest} = r; local.set(id, rest); } }
     if (push.length){ const {error:e2} = await sb.from('items').upsert(push); if (e2) throw e2; }
     items = [...local.values()]; store.set('items', items); render();
+    await archiveClosed(); flushLogs();
     if (manual) toast('동기화 완료');
-  }catch(err){ console.error(err); toast('동기화 실패: 네트워크를 확인하세요'); }
+  }catch(err){ console.error(err); logEvent('sync_error', {msg:String((err && err.message) || err).slice(0, 160)}, 'error'); toast('동기화 실패: 네트워크를 확인하세요'); }
 }
 $('btnSync').onclick = () => { if (sb && !session) showAuth(); else sync(true); };
 
@@ -866,7 +916,7 @@ $('auForm').onsubmit = async e => {
       const {data, error} = await sb.auth.signInWithPassword({email, password: pw}); if (error) throw error;
       session = data.session;
     }
-    $('auPw').value = ''; auSay(''); $('dAuth').close(); await afterLogin();
+    $('auPw').value = ''; auSay(''); $('dAuth').close(); await afterLogin(); logEvent(auMode === 'up' ? 'signup' : 'login', {});
   }catch(err){ auSay(authErr(err), true); }
   finally{ $('auGo').disabled = false; }
 };
@@ -892,12 +942,13 @@ async function hhAct(fn, args){
   const msg = $('hhMsg'); msg.style.color = 'var(--sub)'; msg.textContent = '처리 중…';
   const {data, error} = await sb.rpc(fn, args);
   if (error){ msg.style.color = 'var(--red)'; msg.textContent = hhErr(error); return; }
-  hh = data[0]; store.set('hh', hh); initSb(); $('hhCode').value = ''; $('dHouse').close(); await sync(true);
+  hh = data[0]; store.set('hh', hh); initSb(); $('hhCode').value = ''; $('dHouse').close(); logEvent(fn === 'create_household' ? 'group_create' : 'group_join', {name:hh.name}); await sync(true);
   toast(fn === 'create_household' ? `'${hh.name}' 그룹를 만들었어요` : `'${hh.name}' 그룹에 참여했어요`, 3500);
 }
 $('hhJoin').onclick = () => { const c = $('hhCode').value.trim(); if (!c){ $('hhMsg').style.color = 'var(--red)'; $('hhMsg').textContent = '초대 코드를 입력해 주세요.'; return; } hhAct('join_household', {p_code: c}); };
 $('hhCreate').onclick = () => hhAct('create_household', {p_name: $('hhName').value});
 async function logout(){
+  try{ await flushLogs(); logEvent('logout', {}); await flushLogs(); }catch{}
   try{ await sb.auth.signOut(); }catch{}
   session = null; hh = null; store.set('hh', null); store.set('owner', null); resetLocal(); initSb(); showAuth();
 }
@@ -915,6 +966,71 @@ $('btnSet').onclick = () => {
 };
 $('setClose').onclick = $('setX').onclick = () => $('dSet').close();
 $('setSave').onclick = () => { cfg = {...cfg, notiDays:Number($('notiDays').value)||0}; store.set('cfg', cfg); $('dSet').close(); toast('저장됨'); };
+/* ---------- 처리 기록 (수량 0 → 서버 `item_history`로 이전, 메인 목록에서는 숨김) ---------- */
+const HIST_REASON = {done:'consumed', discarded:'discarded'}, HIST_LABEL = {consumed:'다 먹음', discarded:'폐기'};
+let histWarned = false;
+async function archiveClosed(){
+  try{
+    if (!sb || !hh) return;
+    const closed = items.filter(i => !i.deleted && i.status !== 'active');
+    if (!closed.length) return;
+    const rows = closed.map(i => { const {household, ...d} = i; return {household:hh.id, item_id:i.id, reason:HIST_REASON[i.status] || String(i.status), ended_at:new Date(i.updated_at || Date.now()).toISOString(), data:d}; });
+    const {error} = await sb.from('item_history').upsert(rows, {onConflict:'item_id', ignoreDuplicates:true});
+    if (error){ if (!histWarned){ histWarned = true; logEvent('history_error', {msg:String(error.message || error).slice(0, 140)}, 'error'); } return; }   // 기록 실패 시 제품은 그대로 둠
+    const ids = new Set(closed.map(i => i.id)), now = Date.now();
+    items = items.map(i => ids.has(i.id) ? {...i, deleted:true, updated_at:now} : i); store.set('items', items); render();
+    const {error:e2} = await sb.from('items').upsert(items.filter(i => ids.has(i.id)).map(i => ({...i, household:hh.id})));
+    if (e2) logEvent('history_error', {msg:'목록 정리 실패: ' + String(e2.message || e2).slice(0, 120)}, 'error');
+    else logEvent('history_archive', {count:closed.length});
+  }catch(e){ logEvent('history_error', {msg:String((e && e.message) || e).slice(0, 140)}, 'error'); }
+}
+$('btnHist').onclick = async () => {
+  if (!sb || !hh) return toast('로그인한 뒤에 볼 수 있어요');
+  const box = $('histList'); box.innerHTML = '<p class="hint">불러오는 중…</p>'; $('dHist').showModal();
+  const {data, error} = await sb.from('item_history').select('item_id,reason,ended_at,data').eq('household', hh.id).order('ended_at', {ascending:false}).limit(200);
+  if (error){ box.innerHTML = `<p class="hint" style="color:var(--red)">${/item_history|schema cache|PGRST205|42P01/i.test(String(error.message)) ? '처리 기록 테이블이 아직 없습니다. supabase/history_logs.sql을 먼저 실행해 주세요.' : '불러오지 못했습니다.'}</p>`; return; }
+  box.innerHTML = data.length ? data.map(h => { const d = h.data || {};
+    return `<div class="bkrow"><div><b>${esc(d.name || '(이름 없음)')}</b><small>${esc([d.brand, d.category].filter(Boolean).join(' · '))}${d.expiry ? ' · 기한 ' + esc(d.expiry) : ''}</small></div><div style="text-align:right"><b>${esc(HIST_LABEL[h.reason] || h.reason)}</b><small>${esc(bkFmt(h.ended_at))}</small></div></div>`; }).join('')
+    : '<p class="hint">아직 처리 기록이 없어요. 수량이 0이 되면 여기에 보관됩니다.</p>';
+};
+$('histX').onclick = () => $('dHist').close();
+
+/* ---------- 활동 로그 보기 ---------- */
+const LOG_LABEL = {item_add:'제품 등록', item_add_bulk:'사진으로 여러 개 등록', item_update:'제품 수정', qty_up:'수량 증가', qty_down:'수량 감소', item_done:'다 먹음 처리', item_discarded:'폐기 처리',
+  history_archive:'처리 기록으로 이전', login:'로그인', signup:'가입', logout:'로그아웃', group_create:'그룹 만들기', group_join:'그룹 참여', group_leave:'그룹 나가기',
+  backup_manual:'수동 백업', backup_auto:'자동 백업', 'backup_pre-restore':'복원 전 백업', restore:'백업 복원', import_excel:'엑셀 가져오기', export_excel:'엑셀 내보내기',
+  analyze_ok:'사진 분석', analyze_error:'사진 분석 오류', sync_error:'동기화 오류', history_error:'처리 기록 오류', import_error:'가져오기 오류', js_error:'앱 오류'};
+const FIELD = {name:'이름', brand:'브랜드', category:'카테고리', exp_type:'기한 종류', expiry:'기한', qty:'수량', memo:'메모'};
+function logSummary(l){
+  const d = l.detail || {}, p = [];
+  if (d.name) p.push(d.name);
+  if (d.names) p.push(d.names.join(', ') + (d.count > d.names.length ? ' 외' : ''));
+  if (d.changes) p.push(Object.entries(d.changes).map(([k, v]) => `${FIELD[k] || k} ${v.from || '-'}→${v.to || '-'}`).join(', '));
+  else if (d.from !== undefined && d.to !== undefined) p.push(`${d.from}→${d.to}`);
+  if (d.reason) p.push(d.reason);
+  if (d.count !== undefined && !d.names) p.push(d.count + '개');
+  if (d.added !== undefined) p.push(`추가 ${d.added}, 건너뜀 ${d.skipped}, 제외 ${d.bad}`);
+  if (d.restored !== undefined) p.push(`복원 ${d.restored}, 제외 ${d.removed}`);
+  if (d.photos !== undefined) p.push(`사진 ${d.photos}장 → ${d.found}개`);
+  if (d.msg) p.push(d.msg + (d.line ? ` (${d.src}:${d.line})` : ''));
+  return p.join(' · ');
+}
+let logOnlyErr = false;
+async function loadLogs(){
+  const box = $('logList'); box.innerHTML = '<p class="hint">불러오는 중…</p>';
+  await flushLogs();
+  let q = sb.from('app_logs').select('level,action,detail,device,created_at').eq('household', hh.id).order('created_at', {ascending:false}).limit(150);
+  if (logOnlyErr) q = q.eq('level', 'error');
+  const {data, error} = await q;
+  if (error){ box.innerHTML = `<p class="hint" style="color:var(--red)">${/app_logs|schema cache|PGRST205|42P01/i.test(String(error.message)) ? '로그 테이블이 아직 없습니다. supabase/history_logs.sql을 먼저 실행해 주세요.' : '불러오지 못했습니다.'}</p>`; return; }
+  box.innerHTML = data.length ? data.map(l => `<div class="bkrow"><div><b${l.level === 'error' ? ' style="color:var(--red)"' : ''}>${esc(LOG_LABEL[l.action] || l.action)}</b><small>${esc(logSummary(l))}</small></div><div style="text-align:right"><small>${esc(bkFmt(l.created_at))}</small><small>${esc((l.detail && l.detail.who) || '')} ${esc(l.device || '')}</small></div></div>`).join('')
+    : '<p class="hint">기록이 없어요.</p>';
+}
+$('btnLogs').onclick = () => { if (!sb || !hh) return toast('로그인한 뒤에 볼 수 있어요'); $('dLog').showModal(); loadLogs(); };
+$('logAll').onclick = () => { logOnlyErr = false; $('logAll').classList.add('on'); $('logErr').classList.remove('on'); loadLogs(); };
+$('logErr').onclick = () => { logOnlyErr = true; $('logErr').classList.add('on'); $('logAll').classList.remove('on'); loadLogs(); };
+$('logX').onclick = () => $('dLog').close();
+
 /* ---------- 엑셀 내보내기 ---------- */
 function exportRows(list){
   return list.map(i => {
@@ -923,21 +1039,25 @@ function exportRows(list){
       '남은 일수':has ? dday(i.expiry) : '', '수량':Number(i.qty)||1, '메모':i.memo||''};
   });
 }
-function exportXlsx(){
+async function exportXlsx(){
   const live = items.filter(i => !i.deleted);
   if (!live.length) return toast('내보낼 제품이 없습니다');
   const active = live.filter(i => i.status === 'active').sort((a,b) => (a.expiry||'9999').localeCompare(b.expiry||'9999'));
-  const closed = live.filter(i => i.status !== 'active').map(i => ({...i}));
+  let closed = live.filter(i => i.status !== 'active').map(i => ({...i}));
+  try{   // 처리 기록(서버)도 '처리됨' 시트에 포함
+    if (sb && hh){ const {data} = await sb.from('item_history').select('reason,ended_at,data').eq('household', hh.id).order('ended_at', {ascending:false}).limit(1000);
+      if (data) closed = [...closed, ...data.map(h => ({...(h.data || {}), status:h.reason === 'consumed' ? 'done' : 'discarded', _ended:h.ended_at}))]; }
+  }catch{}
   const name = `유통기한_목록_${fmt(today())}`;
   const cols = [{wch:24},{wch:14},{wch:12},{wch:10},{wch:12},{wch:9},{wch:6},{wch:24}];
   if (window.XLSX){
     const wb = XLSX.utils.book_new();
     const ws1 = XLSX.utils.json_to_sheet(exportRows(active)); ws1['!cols'] = cols; XLSX.utils.book_append_sheet(wb, ws1, '보관 중');
     if (closed.length){
-      const rows = closed.map(i => ({...exportRows([i])[0], '처리':i.status === 'done' ? '다 먹음' : '폐기'}));
+      const rows = closed.map(i => ({...exportRows([i])[0], '처리':i.status === 'done' ? '다 먹음' : '폐기', ...(i._ended ? {'처리일':bkFmt(i._ended)} : {})}));
       const ws2 = XLSX.utils.json_to_sheet(rows); ws2['!cols'] = [...cols, {wch:8}]; XLSX.utils.book_append_sheet(wb, ws2, '처리됨');
     }
-    XLSX.writeFile(wb, name + '.xlsx');
+    XLSX.writeFile(wb, name + '.xlsx'); logEvent('export_excel', {count:active.length + closed.length});
     return toast('엑셀 파일을 저장했어요', 3000);
   }
   // 엑셀 라이브러리를 못 불러온 경우: CSV(엑셀에서 열림, 한글 깨짐 방지 BOM)
@@ -996,8 +1116,8 @@ $('impFile').onchange = async e => {
     if (!r.recs.length) return toast(r.dup ? `새로 추가할 제품이 없습니다 (중복 ${r.dup}개)` : '가져올 제품이 없습니다', 3500);
     const msg = `새로 ${r.recs.length}개를 추가합니다.` + (r.dup ? ` 이미 있는 ${r.dup}개는 건너뜁니다.` : '') + (r.bad.length ? ` 읽을 수 없는 ${r.bad.length}행은 제외합니다. (${r.bad.slice(0, 2).join(' / ')})` : '');
     if (!await askConfirm('엑셀에서 가져올까요?', msg, '가져오기')) return;
-    items = [...items, ...r.recs]; save(); syncSoon(); toast(`${r.recs.length}개 제품을 가져왔어요`, 3500);
-  }catch(err){ console.error(err); toast('파일을 읽지 못했습니다. 내보내기 한 .xlsx/.csv 파일인지 확인해 주세요.', 4500); }
+    items = [...items, ...r.recs]; save(); syncSoon(); logEvent('import_excel', {added:r.recs.length, skipped:r.dup, bad:r.bad.length}); toast(`${r.recs.length}개 제품을 가져왔어요`, 3500);
+  }catch(err){ console.error(err); logEvent('import_error', {msg:String((err && err.message) || err).slice(0, 120)}, 'error'); toast('파일을 읽지 못했습니다. 내보내기 한 .xlsx/.csv 파일인지 확인해 주세요.', 4500); }
 };
 /* ---------- 백업 / 복원 (서버 `backups` 테이블, 그룹별) ---------- */
 const BK_KEEP = 150, BK_KIND = {auto:'자동', manual:'수동', 'pre-restore':'복원 전'};
@@ -1013,6 +1133,7 @@ async function makeBackup(kind = 'manual'){
     const {data:old} = await sb.from('backups').select('id').eq('household', hh.id).order('created_at', {ascending:false}).range(BK_KEEP, BK_KEEP + 200);
     if (old && old.length) await sb.from('backups').delete().in('id', old.map(o => o.id));
   }catch{}
+  logEvent(kind === 'manual' ? 'backup_manual' : kind === 'auto' ? 'backup_auto' : 'backup_' + kind, {count:snap.length});
   return snap.length;
 }
 async function lastBackupInfo(){
@@ -1070,12 +1191,13 @@ async function restoreFrom(snap){
   const restored = snap.map((r, k) => ({...r, deleted:false, updated_at:now + k}));   // 새 시각 → 모든 기기에서 이 상태가 이김
   const removed = items.filter(i => !ids.has(i.id) && !i.deleted).map(i => ({...i, deleted:true, updated_at:now}));
   const rest = items.filter(i => !ids.has(i.id) && i.deleted);
-  items = [...restored, ...removed, ...rest]; save(); await sync();
+  items = [...restored, ...removed, ...rest]; save(); logEvent('restore', {restored:restored.length, removed:removed.length}); await sync();
 }
 $('copyCode').onclick = async () => { try{ await navigator.clipboard.writeText($('acCode').value); toast('초대 코드를 복사했어요'); }catch{ $('acCode').select(); toast('코드를 길게 눌러 복사하세요'); } };
 $('btnLogout').onclick = async () => { if (await askConfirm('로그아웃할까요?', '이 기기에 저장된 제품 목록은 지워지고, 다시 로그인하면 서버에서 불러옵니다.', '로그아웃')) { $('dSet').close(); logout(); } };
 $('btnLeave').onclick = async () => {
   if (!await askConfirm('그룹에서 나갈까요?', '이 계정은 더 이상 이 그룹의 제품을 볼 수 없습니다. 초대 코드가 있으면 다시 참여할 수 있어요.', '나가기')) return;
+  logEvent('group_leave', {name:hh && hh.name}); await flushLogs();
   const {error} = await sb.rpc('leave_household'); if (error) return toast('처리하지 못했습니다: ' + String(error.message).slice(0, 80), 4000);
   hh = null; store.set('hh', null); resetLocal(); initSb(); $('dSet').close(); showHouse();
 };
