@@ -1,6 +1,6 @@
 # 유통기한 지킴이 — 프로젝트 인수인계 문서
 
-> 이 문서는 다른 AI/개발자가 읽고 바로 이어서 작업할 수 있도록 현재 상태를 정리한 것입니다. (작성 기준일: 2026-11-13, 앱 버전 `v12`. **v1은 Git 태그 `v1`(커밋 c9c018d)로 고정됨**, 이후 작업은 v2)
+> 이 문서는 다른 AI/개발자가 읽고 바로 이어서 작업할 수 있도록 현재 상태를 정리한 것입니다. (최종 갱신: 2026-11-13, 앱 버전 `v12`. **v1은 Git 태그 `v1`(커밋 c9c018d)로 고정됨**, 이후 작업은 v2. 현재 상태 요약은 맨 아래 13장 참고)
 > 사용자는 한국어로 소통합니다. 답변도 한국어로 하세요.
 
 ## 1. 목적
@@ -38,9 +38,10 @@
 | `manifest.json`, `icon.svg` | PWA 설정/아이콘 (홈 화면 추가용) |
 | `sw.js` | 서비스워커. **network-first** 캐시. 버전 문자열 `CACHE='expiry-vN'`을 앱 버전과 함께 올림 |
 | `supabase.sql` | `items` 테이블 + RLS 정책 생성 SQL (이미 실행됨) |
-| `supabase/functions/barcode/index.ts` | Edge Function 소스 (Supabase 대시보드에서 **수동 배포**) |
+| `supabase/functions/barcode/index.ts` | Edge Function 소스 — 식약처 C005 프록시 (Supabase에 배포 완료) |
+| `supabase/functions/analyze/index.ts` | Edge Function 소스 — v2 AI 사진 분석(OpenRouter) (배포 완료, 12장 참고) |
 | `HANDOFF.md` | 이 문서 |
-| `.claude/` | 로컬 미리보기 설정(`launch.json`, `.gitignore`로 제외됨) |
+| `.claude/`, `.mcp.json` | 로컬 전용 설정(미리보기, Supabase MCP). 둘 다 `.gitignore`로 제외됨 |
 
 ## 4. index.html 내부 구성 (주요 함수)
 
@@ -135,15 +136,41 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 - 폼이 열린 상태에서 2번째 사진(날짜면 등)을 찍으면 **빈 칸만** 채움 (사용자가 고친 값은 덮어쓰지 않음).
 - 구현 위치: `index.html`의 `/* v2: 제품 사진 AI 분석 */` 블록(`photoToDataUrl`, `callAnalyze`, `analyzeFile`), 서버: `supabase/functions/analyze/index.ts`.
 
-### Edge Function `analyze` (Supabase에 **수동 배포 필요**, Verify JWT = OFF)
-- 시크릿: `OPENROUTER_API_KEY`(필수), `ANALYZE_TOKEN`(임시 접근 토큰), `AI_MODELS`(선택, 쉼표 구분 모델 폴백 목록)
-- 기본 모델 폴백: `google/gemma-4-31b-it:free` → `nvidia/nemotron-3.5-super-vl:free` (OpenRouter 무료, 2026-11-13 조회 기준. 무료 모델은 예고 없이 바뀌므로 `AI_MODELS`로 교체 가능하게 설계)
-- 요청 헤더 `x-admin-token`이 `ANALYZE_TOKEN`과 같아야 처리(로그인 도입 전 **비용/한도 보호용 임시 장치**). 앱에서는 ⚙ 설정의 "AI 분석 토큰"(또는 설정 링크 `#h=…&t=…`)으로 전달 → localStorage 저장. **토큰을 코드/Git에 넣지 말 것.**
-- 결과 검증: 카테고리는 10종 내, 날짜는 `YYYY-MM-DD`, 바코드는 8~14자리 숫자일 때만 인정. 오류 상세는 응답에 포함하지 않음(키 노출 방지).
+### Edge Function `analyze` (배포 완료, Verify JWT = OFF)
+- 시크릿(Supabase): `OPENROUTER_API_KEY`(필수), `ANALYZE_TOKEN`(임시 접근 토큰), `AI_MODELS`(선택, 쉼표 구분 모델 폴백 목록)
+- **기본 모델 폴백 순서**: `google/gemma-4-31b-it:free` → `particle-ai/particle-1:free` → `google/gemma-4-26b-a4b-it:free` → `nvidia/nemotron-3.5-super-vl:free` (OpenRouter 무료, 2026-11-13 조회 기준. 무료 모델은 예고 없이 바뀌므로 `AI_MODELS`로 교체 가능)
+- 요청 헤더 `x-admin-token`이 `ANALYZE_TOKEN`과 같아야 처리(로그인 도입 전 **비용/한도 보호용 임시 장치**). 앱은 ⚙ 설정의 "AI 분석 토큰" 또는 설정 링크(`#h=…&t=…`)로 받아 localStorage에 저장 후 헤더로 전달. **토큰 값을 코드/Git/문서에 넣지 말 것.** (현재 값은 대화에 노출된 임시 값이라 시험 후 교체 권장 — Supabase 시크릿과 각 기기 설정 두 곳을 함께 변경)
+- 요청 본문: `{ "image": dataURL }` 또는 `{ "images": [...] }`(최대 3장, 1.8M자 이하), 선택 `debug: true`(해석 실패 시 모델 원문 앞 300자 반환), `models: "a,b"`(모델 직접 지정), `action: "quota"`(OpenRouter 사용량/한도 조회 — `label` 제외한 안전 필드만 반환)
+- 동작: 모델 순서대로 시도. **429/5xx는 2.5초 후 1회 재시도**, 이후 다음 모델로 폴백. `reasoning: {effort:'low'}`, `max_tokens: 2500`(추론형 모델이 토큰을 생각에 다 써서 빈 답을 내는 문제 대응). 이름/브랜드/바코드/기한 중 **하나라도** 있으면 성공으로 처리(부분 결과 허용).
+- 결과 검증: 카테고리는 10종 내, 날짜는 `YYYY-MM-DD`, 바코드는 8~14자리 숫자일 때만 인정. 모델 오류 사유(OpenRouter 메시지)만 `tried[].status`로 전달하고 키/헤더는 절대 포함하지 않음.
 
-### 상태
-- ✅ 앱 쪽 구현 및 **모의 응답으로** 흐름 검증(신규 등록, 빈 칸만 채우기, 토큰 오류 메시지, 설정 링크 토큰 복원, 전송 크기)
-- ⏳ **실제 모델 호출은 미검증**: Supabase에 시크릿 2개 설정 + 함수 배포가 아직 안 됨(사용자 작업). 배포 후 실제 제품 사진 10~20장으로 모델별 정확도 비교 필요(한글 제품명, 기한 날짜 위주)
-- ⏳ 무료 모델의 한도/품질이 부족하면 `AI_MODELS`에 저렴한 유료 모델 또는 Claude(`claude-haiku-5-5` 등)를 추가. 동일 인터페이스라 설정 변경 수준
-- ⚠️ 무료 모델은 입력이 로깅/학습될 수 있음 → 사진에 개인정보가 찍히지 않게 안내. 사진 자체는 저장하지 않음
-- 🔒 로그인(Supabase Auth) 도입 시 `ANALYZE_TOKEN` 방식은 JWT 검증으로 교체
+### 검증 결과 (2026-11-13)
+- ✅ 앱 흐름(모의 응답): 신규 등록, 2번째 사진은 빈 칸만 채움, 토큰 오류 메시지, 설정 링크 토큰 복원, 전송 크기(≈320KB)
+- ✅ **실제 호출**: OpenRouter 키 정상(`quota` 조회: `is_free_tier:true`, `limit:1`, `limit_remaining:1`, 사용량 0 — 무료 모델은 비용 0). 앱 `analyzeFile` → `analyze` → 모델 → 폼 자동 입력 전체 경로 동작 확인.
+- 모델별 관찰 (시험 사진은 **제품 뒷면(영양정보+바코드)** 1장뿐):
+  - `particle-1`: 정상 JSON, 약 6~8초. 바코드 숫자를 정확히 읽었고 안 보이는 이름/기한은 지어내지 않고 `null`(확신도 low).
+  - `gemma-4-31b`, `gemma-4-26b`: 구글 쪽 일시적 한도 초과(429, "temporarily rate-limited upstream") — 계정 문제가 아님. 혼잡이 풀리면 정상일 수 있음(미확인).
+  - `nemotron-3.5-super-vl`, `dots-3-note`, `openrouter/free`: 추론에 토큰을 소진해 빈 답(`finish_reason: length`). 위 설정으로 완화했으나 **수정 후 재시험은 안 함**.
+- ❌ **미검증(핵심)**: 제품 **앞면**에서 이름/브랜드/카테고리 정확도, **날짜 인쇄면**에서 기한 판독 정확도. 실제 앞면/날짜면 사진이 없어 시험하지 못함. 폰 실기기(v12) 시험도 아직 안 함.
+
+### 알려진 이슈 / 판단 포인트
+- 무료 모델은 한도 초과·품질 편차가 있음. 정확도/안정성이 부족하면 OpenRouter 소액 충전 후 저렴한 유료 비전 모델이나 Claude(`claude-haiku-5-5` 등)를 폴백 마지막에 추가(키의 크레딧 한도 1이 안전장치 역할). 무료 모델의 일일 요청 한도는 충전 여부에 따라 달라지는 것으로 알고 있으나 숫자는 OpenRouter 문서로 확인 필요.
+- 무료 모델은 입력이 로깅/학습될 수 있음 → 사진에 개인정보가 찍히지 않게 안내. 사진 자체는 저장하지 않음.
+- 🔒 로그인(Supabase Auth) 도입 시 `ANALYZE_TOKEN` 방식은 JWT 검증으로 교체.
+
+## 13. 현재 상태 요약 · 다음 할 일 (2026-11-13)
+
+**상태**: v1 완료·태그 고정. v2는 코드/배포/경로 검증까지 끝났고 **실제 제품 사진 정확도 시험이 남음**.
+
+**다음 할 일 (우선순위)**
+1. **정확도 시험**: 제품 앞면 + 날짜면 사진 3~5종(라면/우유/과자/소스 등)으로 `analyze`를 호출해 이름·브랜드·카테고리·기한을 표로 비교. 폰 앱(v12) 실기기 시험 병행. 폰마다 ⚙ 설정에 AI 토큰 입력 필요(또는 `https://heyhhh.github.io/expiry-tracker/#t=<토큰>`을 한 번 열면 저장됨).
+2. 결과에 따라 모델 폴백 순서 조정 또는 유료 폴백 추가 → `AI_MODELS` 시크릿으로 반영.
+3. Supabase Auth + RLS 도입 후 `ANALYZE_TOKEN` 제거(앱 호출을 JWT 기반으로).
+4. v1 쪽 남은 항목(10장): I2570 폴백, 서버 푸시 알림, 폰 실기기 검증 등.
+
+### Supabase MCP 연결 (진행 중)
+- 목적: AI가 함수 배포/로그 확인/DB 작업을 직접 하도록. 현재는 사용자가 대시보드에서 코드를 붙여넣어 **수동 배포**하고 있음.
+- 설정(`.mcp.json`, Git 제외): `https://mcp.supabase.com/mcp?project_ref=nnrzjgsjwgykafawtimt&features=docs,debugging,functions,database` (`account`/`branching`/`notebooks`/`feedback`/`development`는 일부러 제외 — 최초에 모든 기능을 켠 설정으로 파일을 만들려 했을 때 자동 보안 판정이 거부함. 범위를 줄여서 생성은 성공)
+- **남은 일(사용자)**: MCP 서버 **Authenticate**(브라우저 로그인, AI가 대행 불가) 후 **새 세션**으로 시작해야 도구가 로드됨. 이 PC에는 `claude` CLI가 없어서 `npm install -g @anthropic-ai/claude-code` 후 `git clone https://github.com/heyhhh/expiry-tracker C:\expiry-tracker`, 해당 폴더에서 `claude mcp add --scope project --transport http supabase "<위 URL>"` → `claude` 실행 → `/mcp`에서 supabase Authenticate 순서를 안내함. 새 세션의 프로젝트 폴더는 `C:\expiry-tracker`.
+- 연결되면 첫 작업: `analyze`/`barcode` 함수를 최신 소스로 배포하고 로그로 동작 확인.
+- 연결 후에도 **비밀값(OpenRouter/식약처 키) 입력은 사용자가 직접** 한다. 테이블 삭제·정책 변경 같은 큰 DB 변경은 실행 전에 사용자에게 먼저 확인받을 것.
