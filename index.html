@@ -100,6 +100,11 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
 .thumb{position:relative;aspect-ratio:1;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--surface2)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb button{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:99px;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:16px;line-height:1;cursor:pointer}
+.datebox{position:relative}
+.datebox input[type=text]{padding-right:36px}
+.datebox .dpick{position:absolute;right:0;top:0;width:44px;height:100%;opacity:0;cursor:pointer;padding:0;border:0;margin:0}
+.datebox .calico{position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:16px}
+input.bad{outline:2px solid var(--red)}
 .rv{border:1px solid var(--line);border-radius:18px;padding:14px;display:grid;gap:10px;background:var(--surface2)}
 .rv input,.rv select{background:var(--surface)}
 .rv-head{display:flex;justify-content:space-between;align-items:center}
@@ -166,7 +171,7 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v16</p>
+  <p class="hint" id="verInfo">v17</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -192,9 +197,10 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
     <label>카테고리<select id="fCat"></select></label>
   </div>
   <div class="row">
-    <label>기한 종류<select id="fType"><option>소비기한</option><option>유통기한</option></select></label>
-    <label>기한 날짜<input type="date" id="fExp" required></label>
+    <label>기한 종류<select id="fType"><option>소비기한</option><option>유통기한</option><option>사용기한</option></select></label>
+    <label>기한 날짜<div class="datebox"><input id="fExpT" type="text" inputmode="numeric" autocomplete="off" placeholder="2027-03-05 또는 270305" required><input type="date" class="dpick" id="fExp" aria-label="달력에서 선택"><span class="calico" aria-hidden="true">📅</span></div></label>
   </div>
+  <p class="hint" id="expHint" style="margin-top:-4px">숫자만 입력해도 됩니다 (예: 20270305, 270305). 오른쪽 📅를 누르면 달력으로 고를 수 있어요.</p>
   <p class="hint" id="aiNote" style="display:none;color:var(--org)">🤖 AI가 읽은 값입니다. 특히 <b>기한 날짜는 포장과 꼭 대조</b>하세요.</p>
   <div class="quick" id="quick"></div>
   <label>수량<input type="number" id="fQty" min="1" value="1" inputmode="numeric"></label>
@@ -240,8 +246,9 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-const CATS = ['유제품','육류','수산물','채소/과일','음료','과자/간식','냉동식품','가공식품','소스/양념','기타'];
-const ICONS = {'유제품':'🥛','육류':'🥩','수산물':'🐟','채소/과일':'🥬','음료':'🥤','과자/간식':'🍪','냉동식품':'🧊','가공식품':'🥫','소스/양념':'🧂','기타':'📦'};
+const CATS = ['유제품','육류','수산물','채소/과일','음료','과자/간식','냉동식품','가공식품','소스/양념','의약품','건강기능식품','화장품','생활용품','기타'];
+const EXP_TYPES = ['소비기한','유통기한','사용기한'];
+const ICONS = {'유제품':'🥛','육류':'🥩','수산물':'🐟','채소/과일':'🥬','음료':'🥤','과자/간식':'🍪','냉동식품':'🧊','가공식품':'🥫','소스/양념':'🧂','의약품':'💊','건강기능식품':'🌿','화장품':'🧴','생활용품':'🧻','기타':'📦'};
 const DOW = ['일','월','화','수','목','금','토'];
 const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
@@ -260,6 +267,23 @@ const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
 const dday = s => Math.round((new Date(s+'T00:00:00') - today())/864e5);
 const fmt = d => { const z = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; };
 const fmtShort = s => { const d = new Date(s+'T00:00:00'); return `${d.getMonth()+1}.${d.getDate()}(${DOW[d.getDay()]})`; };
+// 직접 입력한 날짜를 해석: 2027-03-05 / 2027.3.5 / 20270305 / 27.03.05 / 270305 / 2027년 3월 5일 → 'YYYY-MM-DD' (잘못된 값은 null, 빈 값은 '')
+function parseDate(str){
+  if (str == null || !String(str).trim()) return '';
+  const t = String(str).trim().replace(/[년월]/g, '.').replace(/일/g, '').replace(/\s+/g, '');
+  let y, mo, d, m = t.match(/^(\d{2}|\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})\.?$/);
+  if (m){ [y, mo, d] = [m[1], m[2], m[3]]; }
+  else {
+    const dg = t.replace(/\D/g, '');
+    if (dg.length === 8){ y = dg.slice(0,4); mo = dg.slice(4,6); d = dg.slice(6,8); }
+    else if (dg.length === 6){ y = dg.slice(0,2); mo = dg.slice(2,4); d = dg.slice(4,6); }
+    else return null;
+  }
+  y = y.length === 2 ? 2000 + Number(y) : Number(y); mo = Number(mo); d = Number(d);
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return fmt(dt);
+}
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random().toString(16).slice(2));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(t, ms=2200){ const e=$('toast'); e.textContent=t; e.style.display='block'; clearTimeout(toast.t); toast.t=setTimeout(()=>e.style.display='none',ms); }
@@ -326,14 +350,22 @@ $('list').onclick = e => {
 $('fCat').innerHTML = CATS.map(c => `<option>${c}</option>`).join('');
 $('quick').innerHTML = [['+3일',3],['+7일',7],['+14일',14],['+1개월',30],['+3개월',90],['+6개월',180],['+1년',365]]
   .map(([t,n]) => `<button type="button" data-n="${n}">${t}</button>`).join('');
-$('quick').onclick = e => { const n = e.target.dataset.n; if (!n) return; const d = today(); d.setDate(d.getDate()+Number(n)); $('fExp').value = fmt(d); };
+function setExp(v){ $('fExpT').value = v || ''; $('fExp').value = parseDate(v) || ''; $('fExpT').classList.remove('bad'); }
+function normExp(){
+  const t = $('fExpT'), p = parseDate(t.value);
+  if (p){ t.value = p; $('fExp').value = p; t.classList.remove('bad'); } else t.classList.toggle('bad', !!t.value.trim());
+}
+$('fExpT').addEventListener('blur', normExp); $('fExpT').addEventListener('change', normExp);
+$('fExpT').addEventListener('input', () => $('fExpT').classList.remove('bad'));
+$('fExp').addEventListener('change', () => { setExp($('fExp').value); saveDraft(); });
+$('quick').onclick = e => { const n = e.target.dataset.n; if (!n) return; const d = today(); d.setDate(d.getDate()+Number(n)); setExp(fmt(d)); saveDraft(); };
 
 function openForm(item, pre = {}){
   editing = item;
   const v = item || {name:'', brand:'', category:'기타', exp_type:'소비기한', expiry:'', qty:1, memo:'', ...pre};
   $('fTitle').textContent = item ? '제품 수정' : '제품 등록';
   $('fName').value = v.name||''; $('fBrand').value = v.brand||''; $('fCat').value = CATS.includes(v.category) ? v.category : '기타';
-  $('fType').value = v.exp_type||'소비기한'; $('fExp').value = v.expiry||''; $('fQty').value = v.qty||1;
+  $('fType').value = EXP_TYPES.includes(v.exp_type) ? v.exp_type : '소비기한'; setExp(v.expiry||''); $('fQty').value = v.qty||1;
   $('fMemo').value = v.memo||'';
   $('fDone').style.display = $('fDiscard').style.display = item ? '' : 'none';
   $('aiNote').style.display = 'none';
@@ -343,9 +375,11 @@ const clearFormDraft = () => store.set('draft', null);
 $('fCancel').onclick = () => { clearFormDraft(); $('dForm').close(); };
 $('form').onsubmit = e => {
   e.preventDefault();
+  const exp = parseDate($('fExpT').value);
+  if (!exp){ $('fExpT').classList.add('bad'); $('fExpT').focus(); return toast('기한 날짜를 확인해 주세요 (예: 2027-03-05, 270305)', 3500); }
   const rec = {
     id: editing?.id || uid(), name:$('fName').value.trim(), brand:$('fBrand').value.trim(), category:$('fCat').value,
-    exp_type:$('fType').value, expiry:$('fExp').value, qty:Number($('fQty').value)||1, barcode:editing?.barcode ?? null,
+    exp_type:$('fType').value, expiry:exp, qty:Number($('fQty').value)||1, barcode:editing?.barcode ?? null,
     memo:$('fMemo').value.trim(), status: editing?.status || 'active', deleted:false, updated_at:Date.now()
   };
   if (!rec.name || !rec.expiry) return;
@@ -361,7 +395,7 @@ $('fDiscard').onclick = () => setStatus('discarded');
 function saveDraft(){
   if (!$('dForm').open) return;
   store.set('draft', {id: editing ? editing.id : null, v:{name:$('fName').value, brand:$('fBrand').value, category:$('fCat').value,
-    exp_type:$('fType').value, expiry:$('fExp').value, qty:$('fQty').value, memo:$('fMemo').value}});
+    exp_type:$('fType').value, expiry:$('fExpT').value, qty:$('fQty').value, memo:$('fMemo').value}});
 }
 $('form').addEventListener('input', saveDraft);
 $('form').addEventListener('change', saveDraft);
@@ -373,7 +407,7 @@ function restoreDraft(){
   openForm(base || null, {});
   const v = d.v;
   $('fName').value = v.name; $('fBrand').value = v.brand; $('fCat').value = v.category; $('fType').value = v.exp_type;
-  $('fExp').value = v.expiry; $('fQty').value = v.qty; $('fMemo').value = v.memo;
+  setExp(v.expiry); $('fQty').value = v.qty; $('fMemo').value = v.memo;
   toast('작성 중이던 내용을 복원했습니다');
 }
 
@@ -474,7 +508,7 @@ $('doAnalyze').onclick = async () => {
       openForm(null, {name: ai.name || '', brand: ai.brand || '', category: ai.category || '기타',
         exp_type: ai.exp_type || '소비기한', expiry: ai.expiry || ''});
       $('aiNote').style.display = '';
-      if (ai.expiry){ $('fExp').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExp').style.outline = '', 6000); }
+      if (ai.expiry){ $('fExpT').style.outline = '2px solid var(--org)'; setTimeout(() => $('fExpT').style.outline = '', 6000); }
       toast(ai.confidence === 'low' ? '자동 입력됨 — 확신도 낮음, 꼭 확인하세요' : '자동 입력됨 — 확인/수정하세요', 4000);
     }
   }catch(e){
@@ -488,7 +522,7 @@ $('doAnalyze').onclick = async () => {
 let reviewItems = [];
 function openReview(list){
   reviewItems = list.map(x => ({name:x.name||'', brand:x.brand||'', category:CATS.includes(x.category)?x.category:'기타',
-    exp_type:x.exp_type||'소비기한', expiry:x.expiry||'', qty:1}));
+    exp_type:EXP_TYPES.includes(x.exp_type)?x.exp_type:'소비기한', expiry:x.expiry||'', qty:1}));
   renderReview(); $('dReview').showModal();
 }
 function renderReview(){
@@ -498,12 +532,27 @@ function renderReview(){
     <label>제품명<input data-f="name" value="${esc(it.name)}"></label>
     <div class="row"><label>브랜드<input data-f="brand" value="${esc(it.brand)}"></label>
       <label>카테고리<select data-f="category">${CATS.map(c => `<option ${c===it.category?'selected':''}>${c}</option>`).join('')}</select></label></div>
-    <div class="row3"><label>기한 종류<select data-f="exp_type">${['소비기한','유통기한'].map(t => `<option ${t===it.exp_type?'selected':''}>${t}</option>`).join('')}</select></label>
-      <label>기한 날짜<input type="date" data-f="expiry" value="${esc(it.expiry)}"></label>
+    <div class="row3"><label>기한 종류<select data-f="exp_type">${EXP_TYPES.map(t => `<option ${t===it.exp_type?'selected':''}>${t}</option>`).join('')}</select></label>
+      <label>기한 날짜<div class="datebox"><input data-f="expiry" type="text" inputmode="numeric" autocomplete="off" placeholder="2027-03-05" value="${esc(it.expiry)}"><input type="date" class="dpick" data-pick value="${esc(parseDate(it.expiry)||'')}" aria-label="달력에서 선택"><span class="calico" aria-hidden="true">📅</span></div></label>
       <label>수량<input type="number" min="1" data-f="qty" value="${esc(it.qty)}" inputmode="numeric"></label></div>
   </div>`).join('');
 }
-const rvEdit = e => { const box = e.target.closest('.rv'); if (box && e.target.dataset.f) reviewItems[Number(box.dataset.i)][e.target.dataset.f] = e.target.value; };
+const rvEdit = e => {
+  const box = e.target.closest('.rv'); if (!box) return;
+  const it = reviewItems[Number(box.dataset.i)];
+  if (e.target.matches('[data-pick]')){            // 달력에서 고른 값 → 입력칸에 반영
+    const t = box.querySelector('[data-f="expiry"]'); t.value = e.target.value; it.expiry = e.target.value; t.classList.remove('bad'); return;
+  }
+  const f = e.target.dataset.f; if (!f) return;
+  it[f] = e.target.value;
+  if (f === 'expiry'){
+    if (e.type === 'change'){                      // 직접 입력한 날짜는 입력을 마치면 YYYY-MM-DD로 정리
+      const p = parseDate(e.target.value);
+      if (p){ e.target.value = p; it.expiry = p; box.querySelector('[data-pick]').value = p; e.target.classList.remove('bad'); }
+      else e.target.classList.toggle('bad', !!e.target.value.trim());
+    } else e.target.classList.remove('bad');
+  }
+};
 $('rvList').addEventListener('input', rvEdit);
 $('rvList').addEventListener('change', rvEdit);
 $('rvList').onclick = e => {
@@ -513,15 +562,15 @@ $('rvList').onclick = e => {
 };
 $('rvCancel').onclick = () => $('dReview').close();
 $('rvSave').onclick = () => {
-  const bad = reviewItems.findIndex(it => !it.name.trim() || !it.expiry);
+  const bad = reviewItems.findIndex(it => !it.name.trim() || !parseDate(it.expiry));
   if (bad >= 0){
-    toast(`${bad+1}번 제품의 제품명과 기한 날짜를 입력해 주세요`, 3500);
+    toast(`${bad+1}번 제품의 제품명과 기한 날짜(예: 2027-03-05, 270305)를 확인해 주세요`, 3500);
     const box = $('rvList').children[bad]; box.scrollIntoView({block:'center'}); box.style.outline = '2px solid var(--org)'; setTimeout(() => box.style.outline = '', 3000);
     return;
   }
   const now = Date.now();
   const recs = reviewItems.map((it, k) => ({id:uid(), name:it.name.trim(), brand:it.brand.trim(), category:it.category,
-    exp_type:it.exp_type, expiry:it.expiry, qty:Number(it.qty)||1, barcode:null, memo:'', status:'active', deleted:false, updated_at:now+k}));
+    exp_type:it.exp_type, expiry:parseDate(it.expiry), qty:Number(it.qty)||1, barcode:null, memo:'', status:'active', deleted:false, updated_at:now+k}));
   items = [...items, ...recs]; $('dReview').close(); save(); syncSoon(); toast(`${recs.length}개 제품을 등록했습니다`);
 };
 

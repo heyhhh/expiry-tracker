@@ -8,11 +8,12 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-const CATS = ['유제품', '육류', '수산물', '채소/과일', '음료', '과자/간식', '냉동식품', '가공식품', '소스/양념', '기타'];
+const CATS = ['유제품', '육류', '수산물', '채소/과일', '음료', '과자/간식', '냉동식품', '가공식품', '소스/양념', '의약품', '건강기능식품', '화장품', '생활용품', '기타'];
+const EXP_TYPES = ['소비기한', '유통기한', '사용기한'];
 const DEFAULT_MODELS = 'google/gemma-4-31b-it:free,particle-ai/particle-1:free,google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3.5-super-vl:free';
 const MAX_IMAGE_CHARS = 1_800_000; // data URL 길이 상한 (약 1.3MB)
 
-const PROMPT = `당신은 한국 식품 포장 사진을 읽는 도우미입니다. 사진은 1번부터 순서대로 주어집니다.
+const PROMPT = `당신은 한국 제품(식품, 의약품, 건강기능식품, 화장품, 생활용품 등) 포장 사진을 읽는 도우미입니다. 사진은 1번부터 순서대로 주어집니다.
 - 같은 제품의 앞면/뒷면/날짜 인쇄면이면 하나의 제품으로 합쳐서 한 항목만 만드세요.
 - 서로 다른 제품이 찍혀 있으면(사진이 여러 장이거나, 한 사진에 여러 제품이 있어도) 제품마다 항목을 따로 만드세요.
 - 모든 사진에 실제로 인쇄된 글자만 근거로 하세요. 아래 JSON 하나만 출력하고 설명이나 코드블록은 쓰지 마세요.
@@ -20,8 +21,8 @@ const PROMPT = `당신은 한국 식품 포장 사진을 읽는 도우미입니�
  {
   "name": "제품명 (포장에 가장 크게 인쇄된 상품 이름만. 한국어 그대로. 용량·규격·부제·설명 문구·홍보 문구(예: 대용량, 1+1, 신제품, 건면, 매운맛 설명)는 제외하되, 맛/종류가 이름의 일부인 경우(예: 딸기맛 우유)는 포함)",
   "brand": "브랜드 또는 제조사",
-  "category": "${CATS.join(' | ')} 중 하나",
-  "exp_type": "소비기한 | 유통기한 | null (문구가 보일 때만)",
+  "category": "${CATS.join(' | ')} 중 하나 (약은 의약품, 영양제·비타민·홍삼 등은 건강기능식품)",
+  "exp_type": "소비기한 | 유통기한 | 사용기한 | null (문구가 보일 때만. 의약품·화장품은 보통 사용기한)",
   "expiry": "YYYY-MM-DD 형식의 기한 날짜, 보이지 않거나 불확실하면 null",
   "confidence": "high | medium | low"
  }
@@ -43,7 +44,7 @@ function clean(o: any) {
     brand: s(o.brand),
     category: CATS.includes(o.category) ? o.category : '기타',
     barcode: barcode && /^\d{8,14}$/.test(barcode) ? barcode : null,
-    exp_type: o.exp_type === '유통기한' || o.exp_type === '소비기한' ? o.exp_type : null,
+    exp_type: EXP_TYPES.includes(o.exp_type) ? o.exp_type : null,
     expiry: exp && /^\d{4}-\d{2}-\d{2}$/.test(exp) ? exp : null,
     confidence: ['high', 'medium', 'low'].includes(o.confidence) ? o.confidence : 'low',
   };
