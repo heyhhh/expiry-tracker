@@ -50,7 +50,9 @@ h1{font-size:19px;margin:0;font-weight:750;letter-spacing:-.03em;white-space:now
 .chip.on em{color:rgba(255,255,255,.85)}
 
 .content{max-width:1100px;margin:0 auto;padding:14px 16px 120px}
-.toolbar{margin-bottom:12px}
+.toolbar{margin-bottom:12px;display:flex;gap:8px;align-items:stretch}
+.toolbar .search{flex:1;min-width:0}
+.sortsel{flex:none;width:auto;max-width:44%;padding:11px 10px;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:var(--shadow);font-size:14px}
 .search{width:100%;padding:12px 14px 12px 40px;border:1px solid var(--line);border-radius:14px;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 13px center;box-shadow:var(--shadow)}
 #list{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(310px,1fr))}
 
@@ -182,7 +184,17 @@ input.bad{outline:2px solid var(--red)}
     <div class="chips" id="chips"></div>
   </div></aside>
   <div class="content">
-    <div class="toolbar"><input class="search" id="search" type="search" placeholder="제품 검색 (이름·브랜드·메모)" autocomplete="off"></div>
+    <div class="toolbar"><input class="search" id="search" type="search" placeholder="제품 검색" autocomplete="off">
+      <select class="sortsel" id="sortSel" aria-label="정렬 기준">
+        <option value="exp-asc">기한 임박순</option>
+        <option value="exp-desc">기한 먼 순</option>
+        <option value="name-asc">이름 가나다순</option>
+        <option value="name-desc">이름 역순</option>
+        <option value="cat">카테고리순</option>
+        <option value="qty-desc">수량 많은 순</option>
+        <option value="qty-asc">수량 적은 순</option>
+        <option value="recent">최근 수정순</option>
+      </select></div>
     <main id="list"></main>
   </div>
 </div>
@@ -195,7 +207,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v32</p>
+  <p class="hint" id="verInfo">v33</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 10장) -->
@@ -434,6 +446,24 @@ function save(){ store.set('items', items); render(); schedSoon(); }
 function tone(d){ return d <= 1 ? 't-red' : d <= 3 ? 't-org' : d <= 7 ? 't-yel' : 't-grn'; }
 function label(d){ return d < 0 ? `D+${-d}` : d === 0 ? 'D-DAY' : `D-${d}`; }
 
+/* ---------- 정렬 ---------- */
+let sortKey = store.get('sort', 'exp-asc');
+const koCmp = (a, b) => String(a || '').localeCompare(String(b || ''), 'ko');
+function sortFn(k){
+  const expAsc = (a, b) => (a.expiry || '9999-99-99').localeCompare(b.expiry || '9999-99-99');      // 기한 없음은 항상 맨 뒤
+  const expDesc = (a, b) => (!a.expiry && !b.expiry) ? 0 : !a.expiry ? 1 : !b.expiry ? -1 : b.expiry.localeCompare(a.expiry);
+  const byName = (a, b) => koCmp(a.name, b.name);
+  switch (k){
+    case 'exp-desc': return (a, b) => expDesc(a, b) || byName(a, b);
+    case 'name-asc': return (a, b) => byName(a, b) || expAsc(a, b);
+    case 'name-desc': return (a, b) => -byName(a, b) || expAsc(a, b);
+    case 'cat': return (a, b) => (CATS.indexOf(a.category) - CATS.indexOf(b.category)) || expAsc(a, b) || byName(a, b);
+    case 'qty-desc': return (a, b) => (Number(b.qty) - Number(a.qty)) || expAsc(a, b);
+    case 'qty-asc': return (a, b) => (Number(a.qty) - Number(b.qty)) || expAsc(a, b);
+    case 'recent': return (a, b) => (Number(b.updated_at) || 0) - (Number(a.updated_at) || 0);
+    default: return (a, b) => expAsc(a, b) || byName(a, b);
+  }
+}
 function render(){
   const active = items.filter(i => !i.deleted && i.status === 'active');
   $('sExp').textContent = active.filter(i => hasExp(i) && dday(i.expiry) <= 0).length;
@@ -446,7 +476,7 @@ function render(){
   const rows = active
     .filter(i => filter === '전체' || i.category === filter)
     .filter(i => !q || [i.name, i.brand, i.memo, i.category].some(v => String(v||'').toLowerCase().includes(q)))
-    .sort((a,b) => (a.expiry || '9999').localeCompare(b.expiry || '9999'));      // 기한 없음은 맨 뒤
+    .sort(sortFn(sortKey));
   $('list').innerHTML = rows.length ? rows.map(i => { const nx = !hasExp(i), d = nx ? 0 : dday(i.expiry);
     return `<div class="card ${nx ? 't-none' : tone(d)}" data-id="${esc(i.id)}">
       <div class="ic ${i.photo?'has':''}" aria-hidden="true">${i.photo ? imgHtml(i.photo, ICONS[i.category]||'📦') : (ICONS[i.category]||'📦')}</div>
@@ -459,6 +489,8 @@ function render(){
         ? `<div class="empty"><div class="big">🔍</div>조건에 맞는 제품이 없습니다.</div>`
         : `<div class="empty"><div class="big">🥫</div>등록된 제품이 없습니다.<br>＋ 버튼으로 제품 사진을 찍어 등록해 보세요.</div>`);
 }
+$('sortSel').value = [...$('sortSel').options].some(o => o.value === sortKey) ? sortKey : 'exp-asc';
+$('sortSel').onchange = e => { sortKey = e.target.value; store.set('sort', sortKey); render(); };
 $('chips').onclick = e => { const b = e.target.closest('.chip'); if (b){ filter = b.dataset.c; render(); } };
 $('search').oninput = e => { q = e.target.value.trim().toLowerCase(); render(); };
 async function decQty(id){

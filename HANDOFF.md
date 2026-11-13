@@ -325,3 +325,6 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 ## 31. v32: 앱에서는 사진 분석 시 카메라 자동 실행 안 함
 - 웹은 `제품 사진으로 AI 분석`을 누르면 바로 카메라가 열리지만(`NATIVE` 아님), 앱(Capacitor)에서는 사진 모으기 화면을 먼저 보여주고 `사진 찍기`/`앨범에서 여러 장`을 직접 선택하게 함. `analyze_ok` 로그에 사용된 모델명 포함.
 - 모델 우선순위(`analyze` DEFAULT_MODELS, 시크릿 `AI_MODELS`가 있으면 그것이 우선): gemma-4-31b → particle-1 → gemma-4-26b → nemotron-3.5-super-vl. OpenRouter 무료 비전 모델 중 inkling-2-small, dots-3-note-preview, nemotron-3-nano-omni 등은 미시험.
+
+## 32. v33: 목록 정렬
+- 검색창 옆 정렬 선택(`#sortSel`, 선택은 localStorage `sort`에 저장): 기한 임박순(기본)/기한 먼 순/이름 가나다순/이름 역순/카테고리순/수량 많은 순/수량 적은 순/최근 수정순. 기한 없음(`확인불가`)은 기한 정렬에서 항상 맨 뒤. 동률이면 기한→이름 순. (`sortFn()`)
