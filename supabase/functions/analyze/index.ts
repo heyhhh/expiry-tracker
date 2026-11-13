@@ -1,5 +1,5 @@
 // 제품 사진 → 제품 정보(JSON) 분석 프록시 (OpenRouter, OpenAI 호환 chat/completions)
-// 시크릿: OPENROUTER_API_KEY (필수), ANALYZE_TOKEN (임시 접근 토큰, 로그인 도입 전까지),
+// 시크릿: OPENROUTER_API_KEY (필수), (인증: 로그인한 리스트 멤버만)
 //         AI_MODELS (선택, 쉼표 구분. 앞에서부터 시도하고 실패하면 다음 모델로 폴백)
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -61,13 +61,26 @@ function clean(o: any, imageCount = 0) {
   };
 }
 
+// 로그인 확인: 요청의 사용자 토큰으로 my_household()를 호출 — 유효한 로그인이면서 리스트에 속한 계정만 통과
+async function authed(req: Request): Promise<boolean> {
+  const tok = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  const apikey = req.headers.get('apikey') || Deno.env.get('SUPABASE_ANON_KEY') || '';
+  const url = Deno.env.get('SUPABASE_URL');
+  if (!tok || !url) return false;
+  try {
+    const r = await fetch(`${url}/rest/v1/rpc/my_household`, { method: 'POST', headers: { apikey, Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' }, body: '{}' });
+    if (!r.ok) return false;
+    const v = await r.json();
+    return typeof v === 'string' && v.length > 0;
+  } catch { return false; }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ ok: false, error: 'POST only' }, 405);
 
-  // 임시 접근 제어: 로그인(Auth) 도입 전까지 토큰이 맞는 호출만 허용 (비용 보호)
-  const token = Deno.env.get('ANALYZE_TOKEN');
-  if (!token || req.headers.get('x-admin-token') !== token) return json({ ok: false, error: 'unauthorized' }, 401);
+  // 로그인한 리스트 멤버만 허용 (비용 보호)
+  if (!(await authed(req))) return json({ ok: false, error: 'unauthorized' }, 401);
 
   // 붙여넣기 실수(앞뒤 공백/줄바꿈, 따옴표, "Bearer " 접두어)를 정리
   const key = (Deno.env.get('OPENROUTER_API_KEY') || '').trim().replace(/^["']|["']$/g, '').replace(/^Bearer\s+/i, '').trim();

@@ -285,3 +285,11 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 - 증상: 사진에 기한이 없는데 등록 폼에 특정 날짜가 채워져 있었음(모델이 날짜를 지어냄).
 - analyze: 모델이 `expiry_text`(사진에 인쇄된 기한 문구 원문)를 함께 반환해야 하고, 서버 `clean()`이 expiry의 연·월·일이 expiry_text 숫자에 들어 있을 때만 인정(아니면 null, 연도 2000~2045 범위 밖도 null). 프롬프트에서 예시 날짜 제거.
 - 앱: 날짜를 못 읽으면 날짜칸을 비워서 시작(숨기지 않음). `확인불가`는 사용자가 직접 고르는 선택지로 유지(고르면 날짜칸이 숨겨지고 expiry=null).
+
+## 24. v23: 로그인(이메일+비밀번호) + 계정별 리스트 + RLS
+- DB(`supabase/auth.sql`, 사용자가 SQL Editor에서 직접 실행): `households`(id, name, invite_code), `members`(user_id PK → household_id; 계정당 리스트 1개). 기존 `Master` 데이터는 "기존 리스트"로 이전. `items` 정책은 `items_member_all`(household = my_household()) 하나뿐이고 anon 권한은 회수 → 로그인 없이는 접근 불가.
+- RPC(authenticated만): `my_household_info()`, `create_household(name)`, `join_household(code)`, `leave_household()`. 초대 코드 12자 대문자.
+- Edge Function `analyze` v20 / `productimage` v12: `x-admin-token`/`ANALYZE_TOKEN` 제거. 요청의 사용자 JWT로 `rpc/my_household`를 호출해 유효 로그인+리스트 소속일 때만 허용(`authed()`).
+- 앱: 로그인/가입 대화상자(`#dAuth`, 닫기 불가), 리스트 선택(`#dHouse`), 설정에 계정·초대 코드·로그아웃·리스트 나가기. 계정이 바뀌면 로컬 목록 초기화(`store 'owner'`). 동기화는 `hh.id`로 필터. 공유 코드(`Master`)와 AI 토큰 입력/링크 기능은 제거.
+- 수동 작업: Supabase Auth → Email → "Confirm email" 끄기(메일 한도 문제), 가족 가입 후 "Allow new users to sign up" 끄기 권장. ANALYZE_TOKEN 시크릿은 더 이상 쓰지 않으므로 삭제 가능.
+- 미검증: 실제 가입/로그인/리스트 공유(계정 생성은 사용자 프로젝트에 영향이 있어 테스트 계정을 만들지 않음). 보안 확인: anon의 items 조회 거부(42501), 함수 호출 무로그인/구 토큰 401.

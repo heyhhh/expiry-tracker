@@ -95,6 +95,9 @@ input:focus,select:focus,.search:focus{outline:2px solid var(--brand);outline-of
 .btn[disabled]{opacity:.45;cursor:not-allowed}
 .t-none{--tone:var(--sub);--tone-bg:rgba(120,120,130,.14)}
 .expset{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.acct{display:flex;justify-content:space-between;gap:10px;align-items:baseline;word-break:break-all}
+.codebox{display:flex;gap:8px;align-items:center}.codebox input{font-weight:700;letter-spacing:.08em}
+.seg{display:flex;gap:8px;flex-wrap:wrap}.seg .chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
 .quick{display:flex;gap:6px;flex-wrap:wrap}
 .quick button{font-size:13px;padding:7px 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface2);cursor:pointer}
 .hint{font-size:12px;color:var(--sub);margin:0}
@@ -186,7 +189,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v22</p>
+  <p class="hint" id="verInfo">v23</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -266,17 +269,42 @@ input.bad{outline:2px solid var(--red)}
 
 <!-- 설정 -->
 <dialog id="dSet"><div class="sheet">
-  <h2>설정 / 기기 간 동기화</h2>
-  <p class="hint">Supabase를 설정하면 폰·태블릿이 같은 데이터를 공유합니다. 모든 기기에 <b>같은 값</b>을 입력하세요. 비워두면 이 기기에만 저장됩니다.</p>
-  <label>Supabase URL<input id="sbUrl" placeholder="https://xxxx.supabase.co"></label>
-  <label>Supabase anon key<input id="sbKey"></label>
-  <label>공유 코드 (길고 추측 어렵게)<input id="sbHh" placeholder="예: kim-family-7f3a9c2e"></label>
-  <label>AI 분석 토큰 (제품 사진 분석용)<input id="aiTok" placeholder="Supabase 시크릿 ANALYZE_TOKEN과 같은 값"></label>
+  <h2>설정</h2>
+  <div class="acct"><span class="hint">로그인 계정</span><b id="acEmail">-</b></div>
+  <div class="acct" id="acHhRow"><span class="hint">내 리스트</span><b id="acHh">-</b></div>
+  <div id="acCodeRow">
+    <label>초대 코드<div class="codebox"><input id="acCode" readonly><button type="button" class="btn sm" id="copyCode">복사</button></div></label>
+    <p class="hint">같은 리스트를 함께 쓸 가족에게 이 코드를 알려 주세요. 가족이 가입한 뒤 "초대 코드로 참여"에 입력하면 같은 제품 목록을 보게 됩니다. 코드를 모르는 사람은 목록을 볼 수 없어요.</p>
+  </div>
   <label>알림 기준 (일 전)<input id="notiDays" value="3" type="number" min="0" inputmode="numeric"></label>
-  <div class="btns"><button class="btn" id="copyLink">🔗 설정 링크 복사</button></div>
-  <p class="hint">링크를 북마크해 두면 데이터를 지워도 링크를 열기만 하면 공유 코드가 복원됩니다. 링크에 공유 코드(와 AI 토큰)가 들어 있으니 남에게 보내지 마세요.</p>
-  <div class="btns"><button class="btn" id="notiPerm">알림 권한 허용</button><button class="btn pri" id="setSave">저장</button><button class="btn" id="setClose">닫기</button></div>
+  <div class="btns"><button class="btn" id="notiPerm">알림 권한 허용</button><button class="btn pri" id="setSave">저장</button></div>
+  <div class="btns"><button class="btn" id="btnLeave">리스트 나가기</button><button class="btn" id="btnLogout">로그아웃</button><button class="btn" id="setClose">닫기</button></div>
   <p class="hint">알림은 현재 앱을 열었을 때 만료 임박 항목을 알려주는 방식입니다. 앱이 꺼져 있을 때의 푸시는 서버 단계에서 추가합니다.</p>
+</div></dialog>
+
+<!-- 로그인 / 가입 (로그인 전에는 닫을 수 없음) -->
+<dialog id="dAuth"><div class="sheet">
+  <h2>유통기한 지킴이</h2>
+  <div class="seg"><button type="button" class="chip on" id="auTabIn">로그인</button><button type="button" class="chip" id="auTabUp">처음이에요 (가입)</button></div>
+  <form id="auForm" class="sheet" style="padding:0">
+    <label>이메일<input id="auEmail" type="email" autocomplete="email" inputmode="email" required></label>
+    <label>비밀번호 (8자 이상)<input id="auPw" type="password" autocomplete="current-password" minlength="8" required></label>
+    <p class="hint" id="auMsg" role="status"></p>
+    <div class="btns"><button class="btn pri" id="auGo">로그인</button></div>
+  </form>
+  <p class="hint">로그인하면 가족과 같은 제품 목록을 폰·태블릿에서 함께 볼 수 있어요.</p>
+</div></dialog>
+
+<!-- 리스트 만들기 / 초대 코드로 참여 -->
+<dialog id="dHouse"><div class="sheet">
+  <h2>어느 리스트를 쓸까요?</h2>
+  <p class="hint">가족이 이미 쓰고 있다면 받은 <b>초대 코드</b>로 참여하세요. 처음이라면 새 리스트를 만들면 됩니다.</p>
+  <label>초대 코드로 참여<input id="hhCode" placeholder="예: 93302AEE9572" autocapitalize="characters" autocomplete="off"></label>
+  <div class="btns"><button class="btn pri" id="hhJoin">초대 코드로 참여</button></div>
+  <label>새 리스트 이름<input id="hhName" placeholder="예: 우리 집" maxlength="30"></label>
+  <div class="btns"><button class="btn" id="hhCreate">새 리스트 만들기</button></div>
+  <p class="hint" id="hhMsg" role="status"></p>
+  <div class="btns"><button class="btn" id="hhOut">로그아웃</button></div>
 </div></dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
@@ -293,11 +321,9 @@ const store = {
 };
 let items = store.get('items', []);
 // URL과 publishable 키는 공개 전제의 값이라 기본값으로 내장 (비밀은 공유 코드뿐)
-const DEFAULTS = {sbUrl:'https://nnrzjgsjwgykafawtimt.supabase.co', sbKey:'sb_publishable_vfmo-2H6jIbNlx6FCezYkw_5ohw1y0n', hh:'', aiToken:'', notiDays:3};
+const DEFAULTS = {sbUrl:'https://nnrzjgsjwgykafawtimt.supabase.co', sbKey:'sb_publishable_vfmo-2H6jIbNlx6FCezYkw_5ohw1y0n', notiDays:3};
 let cfg = {...DEFAULTS, ...store.get('cfg', {})};
 if (!cfg.sbUrl) cfg.sbUrl = DEFAULTS.sbUrl; if (!cfg.sbKey) cfg.sbKey = DEFAULTS.sbKey;
-// 설정 링크(#h=공유코드&t=AI토큰)로 열면 자동 복원
-try{ const m = location.hash.match(/[#&]h=([^&]+)/), t = location.hash.match(/[#&]t=([^&]+)/); if (m || t){ if (m) cfg.hh = decodeURIComponent(m[1]); if (t) cfg.aiToken = decodeURIComponent(t[1]); store.set('cfg', cfg); history.replaceState(null, '', location.pathname + location.search); } }catch{}
 let filter = '전체', q = '', editing = null, sb = null;
 
 const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
@@ -456,11 +482,11 @@ let photoCleared = false, formImages = [];
 async function findImages(name, brand){
   name = (name || '').trim(); brand = (brand || '').trim();
   if (name.length < 2) return {ok:false, items:[], err:'short'};
-  if (!cfg.sbUrl || !cfg.sbKey || !cfg.aiToken) return {ok:false, items:[], err:'notoken'};
+  if (!sb || !hh) return {ok:false, items:[], err:'notoken'};
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
   try{
     const r = await fetch(`${cfg.sbUrl}/functions/v1/productimage`, {method:'POST', signal:ctl.signal,
-      headers:{'Content-Type':'application/json', apikey:cfg.sbKey, 'x-admin-token':cfg.aiToken}, body:JSON.stringify({q:name, brand})});
+      headers: await authHeaders(), body:JSON.stringify({q:name, brand})});
     const j = await r.json().catch(() => ({}));
     if (r.status === 401) return {ok:false, items:[], err:'token'};
     if (!j.ok) return {ok:false, items:[], err:j.error || ('http ' + r.status)};
@@ -482,8 +508,8 @@ $('fName').addEventListener('change', () => autoImage());
 
 const IP_ERR = {
   short:'제품명을 2글자 이상 입력한 뒤 눌러 주세요.',
-  notoken:'이 기기에 AI 토큰이 없어 검색할 수 없어요. ⚙ 설정에서 토큰을 확인해 주세요.',
-  token:'AI 토큰이 올바르지 않아요. ⚙ 설정을 확인해 주세요.',
+  notoken:'로그인한 뒤에 이미지를 찾을 수 있어요.',
+  token:'로그인이 만료되었어요. 설정에서 로그아웃 후 다시 로그인해 주세요.',
   timeout:'검색 시간이 너무 오래 걸렸어요. 잠시 후 다시 시도해 주세요.',
   network:'서버에 연결하지 못했어요. 네트워크를 확인해 주세요.',
   'naver keys missing':'이미지 검색 설정(네이버 API 키)이 아직 안 되어 있어요.'
@@ -637,7 +663,7 @@ async function callAnalyze(images){
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 110000);
   try{
     const r = await fetch(`${cfg.sbUrl}/functions/v1/analyze`, {method:'POST', signal:ctl.signal,
-      headers:{'Content-Type':'application/json', apikey:cfg.sbKey, 'x-admin-token':cfg.aiToken}, body:JSON.stringify({images})});
+      headers: await authHeaders(), body:JSON.stringify({images})});
     const j = await r.json().catch(() => ({}));
     if (r.status === 401) throw new Error('token');
     if (!j.ok) throw new Error('fail');
@@ -647,7 +673,7 @@ async function callAnalyze(images){
 $('doAnalyze').onclick = async () => {
   if (!photos.length) return;
   clearCamPending();
-  if (!cfg.sbUrl || !cfg.sbKey || !cfg.aiToken) return toast('⚙ 설정에 "AI 분석 토큰"을 입력하세요', 3500);
+  if (!sb || !hh) return toast('로그인한 뒤에 사진을 분석할 수 있어요', 3500);
   const btn = $('doAnalyze'); btn.disabled = true; btn.textContent = '🤖 분석 중… (최대 1~2분)';
   toast('🤖 AI가 사진을 분석 중입니다', 100000);
   try{
@@ -669,7 +695,7 @@ $('doAnalyze').onclick = async () => {
     }
   }catch(e){
     renderThumbs();
-    toast(e.message === 'token' ? 'AI 토큰이 올바르지 않습니다. ⚙ 설정을 확인하세요.' : 'AI 분석에 실패했습니다. (무료 모델 한도 초과일 수 있어요) 다시 시도하거나 수동 등록을 이용하세요.', 5000);
+    toast(e.message === 'token' ? '로그인이 만료되었습니다. ⚙ 설정에서 로그아웃 후 다시 로그인해 주세요.' : 'AI 분석에 실패했습니다. (무료 모델 한도 초과일 수 있어요) 다시 시도하거나 수동 등록을 이용하세요.', 5000);
   }
 };
 
@@ -753,39 +779,128 @@ $('rvSave').onclick = () => {
 };
 
 /* ---------- 동기화 (Supabase) ---------- */
+let hh = store.get('hh', null);        // {id, name, invite_code} — 내가 속한 리스트
+let session = null;
 function initSb(){
   sb = null;
-  if (cfg.sbUrl && cfg.sbKey && cfg.hh && window.supabase) { try{ sb = supabase.createClient(cfg.sbUrl, cfg.sbKey); }catch{} }
-  $('btnSync').style.opacity = sb ? 1 : .45;
+  if (cfg.sbUrl && cfg.sbKey && window.supabase) { try{ sb = supabase.createClient(cfg.sbUrl, cfg.sbKey, {auth:{persistSession:true, autoRefreshToken:true}}); }catch{} }
+  $('btnSync').style.opacity = sb && hh ? 1 : .45;
+}
+// Edge Function 호출용 헤더 (로그인 토큰)
+async function authHeaders(){
+  let tok = ''; try{ const {data} = await sb.auth.getSession(); tok = data.session ? data.session.access_token : ''; }catch{}
+  return {'Content-Type':'application/json', apikey:cfg.sbKey, Authorization:'Bearer ' + tok};
 }
 let syncTimer; const syncSoon = () => { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 600); };
 async function sync(manual){
-  if (!sb){ if (manual) toast('설정에서 Supabase를 입력하면 기기 간 동기화됩니다.'); return; }
+  if (!sb || !hh){ if (manual) toast(session ? '리스트를 먼저 선택해 주세요.' : '로그인하면 기기 간 동기화됩니다.'); return; }
   try{
-    const {data, error} = await sb.from('items').select('*').eq('household', cfg.hh);
+    const {data, error} = await sb.from('items').select('*').eq('household', hh.id);
     if (error) throw error;
     const local = new Map(items.map(i => [i.id, i])), remote = new Map(data.map(r => [r.id, r]));
     const push = [];
-    for (const [id, l] of local){ const r = remote.get(id); if (!r || l.updated_at > r.updated_at) push.push({...l, household:cfg.hh}); }
+    for (const [id, l] of local){ const r = remote.get(id); if (!r || l.updated_at > r.updated_at) push.push({...l, household:hh.id}); }
     for (const [id, r] of remote){ const l = local.get(id); if (!l || r.updated_at > l.updated_at){ const {household, ...rest} = r; local.set(id, rest); } }
     if (push.length){ const {error:e2} = await sb.from('items').upsert(push); if (e2) throw e2; }
     items = [...local.values()]; store.set('items', items); render();
     if (manual) toast('동기화 완료');
-  }catch(err){ console.error(err); toast('동기화 실패: 설정/네트워크를 확인하세요'); }
+  }catch(err){ console.error(err); toast('동기화 실패: 네트워크를 확인하세요'); }
 }
-$('btnSync').onclick = () => sync(true);
+$('btnSync').onclick = () => { if (sb && !session) showAuth(); else sync(true); };
+
+/* ---------- 로그인 / 리스트 ---------- */
+const noClose = id => $(id).addEventListener('cancel', e => e.preventDefault());   // Esc로 닫기 방지
+['dAuth','dHouse'].forEach(noClose);
+function resetLocal(){ items = []; store.set('items', []); clearFormDraft(); render(); }
+function showAuth(){ ['dSet','dHouse'].forEach(i => { if ($(i).open) $(i).close(); }); if (!$('dAuth').open) $('dAuth').showModal(); }
+function showHouse(){ if ($('dAuth').open) $('dAuth').close(); $('hhMsg').textContent = ''; if (!$('dHouse').open) $('dHouse').showModal(); }
+const authErr = e => {
+  const m = String((e && e.message) || e || '');
+  if (/Invalid login/i.test(m)) return '이메일 또는 비밀번호가 올바르지 않습니다.';
+  if (/already registered|already been registered/i.test(m)) return '이미 가입된 이메일입니다. 로그인해 주세요.';
+  if (/not confirmed/i.test(m)) return '이메일 확인이 필요합니다. 받은 메일의 링크를 누른 뒤 로그인해 주세요.';
+  if (/at least/i.test(m)) return '비밀번호는 8자 이상이어야 합니다.';
+  if (/rate limit|too many|seconds/i.test(m)) return '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
+  if (/signups? (are )?(not allowed|disabled)/i.test(m)) return '지금은 새 가입이 닫혀 있습니다.';
+  if (/valid email|invalid email/i.test(m)) return '이메일 형식을 확인해 주세요.';
+  return '처리하지 못했습니다: ' + m.slice(0, 100);
+};
+let auMode = 'in';
+function setAuMode(m){
+  auMode = m; $('auTabIn').classList.toggle('on', m === 'in'); $('auTabUp').classList.toggle('on', m === 'up');
+  $('auGo').textContent = m === 'in' ? '로그인' : '가입하기'; $('auPw').autocomplete = m === 'in' ? 'current-password' : 'new-password'; $('auMsg').textContent = '';
+}
+$('auTabIn').onclick = () => setAuMode('in'); $('auTabUp').onclick = () => setAuMode('up');
+const auSay = (t, bad) => { const m = $('auMsg'); m.textContent = t; m.style.color = bad ? 'var(--red)' : 'var(--sub)'; };
+$('auForm').onsubmit = async e => {
+  e.preventDefault();
+  if (!sb) return auSay('서버 라이브러리를 불러오지 못했습니다. 새로고침해 주세요.', true);
+  const email = $('auEmail').value.trim(), pw = $('auPw').value;
+  $('auGo').disabled = true; auSay('처리 중…');
+  try{
+    if (auMode === 'up'){
+      const {data, error} = await sb.auth.signUp({email, password: pw}); if (error) throw error;
+      if (!data.session){ auSay('확인 메일을 보냈습니다. 메일의 링크를 누른 뒤 로그인해 주세요.'); setAuMode('in'); return; }
+      session = data.session;
+    } else {
+      const {data, error} = await sb.auth.signInWithPassword({email, password: pw}); if (error) throw error;
+      session = data.session;
+    }
+    $('auPw').value = ''; auSay(''); $('dAuth').close(); await afterLogin();
+  }catch(err){ auSay(authErr(err), true); }
+  finally{ $('auGo').disabled = false; }
+};
+// 로그인 직후/앱 시작 시: 다른 계정의 로컬 데이터 정리 → 내 리스트 확인 → 동기화
+async function afterLogin(){
+  const uid = session.user.id;
+  if (store.get('owner', null) !== uid){ hh = null; store.set('hh', null); store.set('owner', uid); resetLocal(); }
+  const {data, error} = await sb.rpc('my_household_info');
+  if (error){ if (!hh) toast('서버에 연결하지 못했습니다. 네트워크를 확인해 주세요.', 4000); initSb(); return; }
+  if (!data || !data.length){ hh = null; store.set('hh', null); initSb(); return showHouse(); }
+  hh = data[0]; store.set('hh', hh); initSb();
+  if ($('dHouse').open) $('dHouse').close();
+  await sync(); checkAlerts();
+}
+const hhErr = e => {
+  const m = String((e && e.message) || e || '');
+  if (/invalid code/i.test(m)) return '초대 코드가 올바르지 않습니다. 다시 확인해 주세요.';
+  if (/already in/i.test(m)) return '이미 리스트에 속해 있습니다.';
+  if (/not logged/i.test(m)) return '로그인이 필요합니다.';
+  return '처리하지 못했습니다: ' + m.slice(0, 100);
+};
+async function hhAct(fn, args){
+  const msg = $('hhMsg'); msg.style.color = 'var(--sub)'; msg.textContent = '처리 중…';
+  const {data, error} = await sb.rpc(fn, args);
+  if (error){ msg.style.color = 'var(--red)'; msg.textContent = hhErr(error); return; }
+  hh = data[0]; store.set('hh', hh); initSb(); $('hhCode').value = ''; $('dHouse').close(); await sync(true);
+  toast(fn === 'create_household' ? `'${hh.name}' 리스트를 만들었어요` : `'${hh.name}' 리스트에 참여했어요`, 3500);
+}
+$('hhJoin').onclick = () => { const c = $('hhCode').value.trim(); if (!c){ $('hhMsg').style.color = 'var(--red)'; $('hhMsg').textContent = '초대 코드를 입력해 주세요.'; return; } hhAct('join_household', {p_code: c}); };
+$('hhCreate').onclick = () => hhAct('create_household', {p_name: $('hhName').value});
+async function logout(){
+  try{ await sb.auth.signOut(); }catch{}
+  session = null; hh = null; store.set('hh', null); store.set('owner', null); resetLocal(); initSb(); showAuth();
+}
+$('hhOut').onclick = logout;
+if (typeof window !== 'undefined') window.__auth = {get hh(){ return hh; }, get session(){ return session; }};
 
 /* ---------- 설정/알림 ---------- */
-$('btnSet').onclick = () => { $('sbUrl').value = cfg.sbUrl; $('sbKey').value = cfg.sbKey; $('sbHh').value = cfg.hh; $('aiTok').value = cfg.aiToken || ''; $('notiDays').value = cfg.notiDays; $('dSet').showModal(); };
-$('setClose').onclick = () => $('dSet').close();
-$('setSave').onclick = () => {
-  cfg = {sbUrl:$('sbUrl').value.trim(), sbKey:$('sbKey').value.trim(), hh:$('sbHh').value.trim(), aiToken:$('aiTok').value.trim(), notiDays:Number($('notiDays').value)||0};
-  store.set('cfg', cfg); $('dSet').close(); initSb(); sync(true);
+$('btnSet').onclick = () => {
+  if (sb && !session) return showAuth();
+  $('acEmail').textContent = session && session.user ? session.user.email : '-';
+  $('acHh').textContent = hh ? hh.name : '-'; $('acCode').value = hh ? hh.invite_code : '';
+  $('acCodeRow').style.display = $('acHhRow').style.display = hh ? '' : 'none';
+  $('btnLeave').style.display = hh ? '' : 'none';
+  $('notiDays').value = cfg.notiDays; $('dSet').showModal();
 };
-$('copyLink').onclick = async () => {
-  const hh = $('sbHh').value.trim() || cfg.hh; if (!hh) return toast('공유 코드를 먼저 입력하세요');
-  const tk = ($('aiTok').value.trim() || cfg.aiToken || ''); const link = location.origin + location.pathname + '#h=' + encodeURIComponent(hh) + (tk ? '&t=' + encodeURIComponent(tk) : '');
-  try{ await navigator.clipboard.writeText(link); toast('링크 복사됨 — 북마크/메모에 보관하세요'); }catch{ prompt('이 링크를 복사해 보관하세요', link); }
+$('setClose').onclick = () => $('dSet').close();
+$('setSave').onclick = () => { cfg = {...cfg, notiDays:Number($('notiDays').value)||0}; store.set('cfg', cfg); $('dSet').close(); toast('저장됨'); };
+$('copyCode').onclick = async () => { try{ await navigator.clipboard.writeText($('acCode').value); toast('초대 코드를 복사했어요'); }catch{ $('acCode').select(); toast('코드를 길게 눌러 복사하세요'); } };
+$('btnLogout').onclick = async () => { if (await askConfirm('로그아웃할까요?', '이 기기에 저장된 제품 목록은 지워지고, 다시 로그인하면 서버에서 불러옵니다.', '로그아웃')) { $('dSet').close(); logout(); } };
+$('btnLeave').onclick = async () => {
+  if (!await askConfirm('리스트에서 나갈까요?', '이 계정은 더 이상 이 리스트의 제품을 볼 수 없습니다. 초대 코드가 있으면 다시 참여할 수 있어요.', '나가기')) return;
+  const {error} = await sb.rpc('leave_household'); if (error) return toast('처리하지 못했습니다: ' + String(error.message).slice(0, 80), 4000);
+  hh = null; store.set('hh', null); resetLocal(); initSb(); $('dSet').close(); showHouse();
 };
 $('notiPerm').onclick = async () => {
   if (!('Notification' in window)) return toast('이 브라우저는 알림을 지원하지 않습니다. (아이폰은 홈 화면에 추가 후 사용)');
@@ -804,7 +919,15 @@ function checkAlerts(){
 
 /* ---------- 시작 ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-initSb(); render(); restoreDraft(); restorePhotos(); sync().then(checkAlerts);
+initSb(); render();
+(async () => {
+  if (!sb) return;
+  sb.auth.onAuthStateChange((ev, sess) => { session = sess; if (ev === 'SIGNED_OUT' && !$('dAuth').open) showAuth(); });
+  try{ const {data} = await sb.auth.getSession(); session = data.session; }catch{}
+  if (!session) return showAuth();
+  await afterLogin();
+  if (hh){ restoreDraft(); restorePhotos(); }
+})();
 document.addEventListener('visibilitychange', () => { if (!document.hidden){ render(); sync(); } });
 </script>
 </body>

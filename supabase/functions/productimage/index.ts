@@ -1,5 +1,5 @@
 // 제품 대표 이미지 검색 프록시 (NAVER API HUB 검색: 쇼핑 → 결과가 없거나 쓸 수 없으면 이미지 검색으로 대체)
-// 시크릿: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET (필수), ANALYZE_TOKEN (analyze와 같은 임시 접근 토큰)
+// 시크릿: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET (필수). 인증: 로그인한 리스트 멤버만
 // 키는 NAVER API HUB(console.ncloud.com) 애플리케이션의 Client ID(X-NCP-APIGW-API-KEY-ID) / Client Secret(X-NCP-APIGW-API-KEY).
 // 기존 개발자센터(openapi.naver.com) 키도 대체 경로로 시도한다. 이미지 파일은 저장하지 않고 "이미지 주소"만 돌려준다.
 const cors = {
@@ -14,12 +14,26 @@ const stripTags = (t: unknown) => String(t ?? '').replace(/<[^>]+>/g, '').replac
 type Item = { image: string; title: string; brand: string; mall: string };
 type Res = { ok: boolean; status: number; data?: any; why?: string };
 
+// 로그인 확인: 요청의 사용자 토큰으로 my_household()를 호출 — 유효한 로그인이면서 리스트에 속한 계정만 통과
+async function authed(req: Request): Promise<boolean> {
+  const tok = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  const apikey = req.headers.get('apikey') || Deno.env.get('SUPABASE_ANON_KEY') || '';
+  const url = Deno.env.get('SUPABASE_URL');
+  if (!tok || !url) return false;
+  try {
+    const r = await fetch(`${url}/rest/v1/rpc/my_household`, { method: 'POST', headers: { apikey, Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' }, body: '{}' });
+    if (!r.ok) return false;
+    const v = await r.json();
+    return typeof v === 'string' && v.length > 0;
+  } catch { return false; }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ ok: false, error: 'POST only' }, 405);
 
-  const token = Deno.env.get('ANALYZE_TOKEN');
-  if (!token || req.headers.get('x-admin-token') !== token) return json({ ok: false, error: 'unauthorized' }, 401);
+  // 로그인한 리스트 멤버만 허용 (비용 보호)
+  if (!(await authed(req))) return json({ ok: false, error: 'unauthorized' }, 401);
 
   const clean = (v: string | undefined) => (v || '').trim().replace(/^["']|["']$/g, '').trim();
   let id = clean(Deno.env.get('NAVER_CLIENT_ID'));
