@@ -17,7 +17,7 @@ create policy backups_member_all on public.backups for all to authenticated
   with check (household = public.my_household());
 revoke all on public.backups from anon;
 
--- (선택) 앱을 열지 않아도 매일 새벽 4시(한국 시간)에 자동 백업, 자동 백업은 리스트당 최근 30개만 보관
+-- (선택) 앱을 열지 않아도 매일 새벽 4시(한국 시간)에 자동 백업, 자동 백업은 리스트당 최근 150개만 보관
 do $$
 begin
   create extension if not exists pg_cron;
@@ -27,7 +27,7 @@ begin
       from public.items i where not deleted group by household;
     delete from public.backups where kind = 'auto' and id in (
       select id from (select id, row_number() over (partition by household order by created_at desc) rn
-                      from public.backups where kind = 'auto') t where rn > 30);
+                      from public.backups where kind = 'auto') t where rn > 150);
   $job$);
 exception when others then
   raise notice 'pg_cron을 켤 수 없어 서버 자동 백업은 건너뜁니다 (앱의 하루 1회 자동 백업은 동작): %', sqlerrm;

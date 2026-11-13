@@ -192,7 +192,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v25</p>
+  <p class="hint" id="verInfo">v26</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 5장) -->
@@ -996,7 +996,7 @@ $('impFile').onchange = async e => {
   }catch(err){ console.error(err); toast('파일을 읽지 못했습니다. 내보내기 한 .xlsx/.csv 파일인지 확인해 주세요.', 4500); }
 };
 /* ---------- 백업 / 복원 (서버 `backups` 테이블, 리스트별) ---------- */
-const BK_KEEP = 30, BK_KIND = {auto:'자동', manual:'수동', 'pre-restore':'복원 전'};
+const BK_KEEP = 150, BK_KIND = {auto:'자동', manual:'수동', 'pre-restore':'복원 전'};
 const bkFmt = iso => { const d = new Date(iso), z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
 const bkMissing = e => e && /relation .*backups|backups.*does not exist|schema cache|PGRST205|42P01/i.test(String(e.message || e.code || e));
 async function makeBackup(kind = 'manual'){
