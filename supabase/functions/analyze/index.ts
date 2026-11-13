@@ -9,7 +9,7 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 const CATS = ['유제품', '육류', '수산물', '채소/과일', '음료', '과자/간식', '냉동식품', '가공식품', '소스/양념', '기타'];
-const DEFAULT_MODELS = 'google/gemma-4-31b-it:free,nvidia/nemotron-3.5-super-vl:free';
+const DEFAULT_MODELS = 'google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3.5-super-vl:free';
 const MAX_IMAGE_CHARS = 1_800_000; // data URL 길이 상한 (약 1.3MB)
 
 const PROMPT = `당신은 한국 식품 포장 사진을 읽는 도우미입니다. 사진에 실제로 인쇄된 글자만 근거로 아래 JSON 하나만 출력하세요. 설명이나 코드블록은 쓰지 마세요.
@@ -69,42 +69,57 @@ Deno.serve(async (req) => {
   const models = (typeof body.models === 'string' && body.models ? body.models : (Deno.env.get('AI_MODELS') || DEFAULT_MODELS))
     .split(',').map((m: string) => m.trim()).filter(Boolean);
 
-  const tried: { model: string; status: string }[] = [];
+  const debug = body.debug === true;
+  const tried: { model: string; status: string; raw?: string }[] = [];
+  const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
   for (const model of models) {
-    try {
-      const ctl = new AbortController();
-      const t = setTimeout(() => ctl.abort(), 60000);
-      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        signal: ctl.signal,
-        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'expiry-tracker' },
-        body: JSON.stringify({
-          model,
-          temperature: 0,
-          max_tokens: 400,
-          response_format: { type: 'json_object' },
-          messages: [{
-            role: 'user',
-            content: [{ type: 'text', text: PROMPT }, ...images.map((u) => ({ type: 'image_url', image_url: { url: u } }))],
-          }],
-        }),
-      });
-      clearTimeout(t);
-      if (!r.ok) {
-        // OpenRouter의 오류 사유(예: "User not found", "No endpoints found")만 짧게 전달. 요청 헤더/키는 포함되지 않음.
-        let why = '';
-        try { const e = await r.json(); why = String(e?.error?.message ?? '').slice(0, 140); } catch { /* ignore */ }
-        tried.push({ model, status: `http ${r.status}${why ? ': ' + why : ''}` });
-        continue;
+    // 429(무료 모델 혼잡/한도)·5xx는 1회 재시도 후 다음 모델로 폴백
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), 60000);
+        const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          signal: ctl.signal,
+          headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-Title': 'expiry-tracker' },
+          body: JSON.stringify({
+            model,
+            temperature: 0,
+            max_tokens: 900,
+            response_format: { type: 'json_object' },
+            messages: [{
+              role: 'user',
+              content: [{ type: 'text', text: PROMPT }, ...images.map((u) => ({ type: 'image_url', image_url: { url: u } }))],
+            }],
+          }),
+        });
+        clearTimeout(t);
+        if (!r.ok) {
+          // OpenRouter의 오류 사유만 짧게 전달 (요청 헤더/키는 포함되지 않음)
+          let why = '';
+          try {
+            const e = await r.json();
+            why = [e?.error?.message, typeof e?.error?.metadata?.raw === 'string' ? e.error.metadata.raw : ''].filter(Boolean).join(' | ').slice(0, 200);
+          } catch { /* ignore */ }
+          if ((r.status === 429 || r.status >= 500) && attempt === 0) { await sleep(2500); continue; }
+          tried.push({ model, status: `http ${r.status}${why ? ': ' + why : ''}` });
+          break;
+        }
+        const j = await r.json();
+        const text = j?.choices?.[0]?.message?.content;
+        const str = typeof text === 'string' ? text : JSON.stringify(text ?? '');
+        const data = clean(parse(str));
+        if (!data || !data.name) {
+          const fin = j?.choices?.[0]?.finish_reason;
+          tried.push({ model, status: `unparsable${fin ? ' (' + fin + ')' : ''}`, ...(debug ? { raw: str.slice(0, 300) } : {}) });
+          break;
+        }
+        tried.push({ model, status: 'ok' });
+        return json({ ok: true, model, data, tried });
+      } catch (_e) {
+        tried.push({ model, status: 'error' }); // 오류 내용은 키/주소 노출 방지를 위해 돌려주지 않음
+        break;
       }
-      const j = await r.json();
-      const text = j?.choices?.[0]?.message?.content;
-      const data = clean(parse(typeof text === 'string' ? text : JSON.stringify(text ?? '')));
-      if (!data || !data.name) { tried.push({ model, status: 'unparsable' }); continue; }
-      tried.push({ model, status: 'ok' });
-      return json({ ok: true, model, data, tried });
-    } catch (_e) {
-      tried.push({ model, status: 'error' }); // 오류 내용은 키/주소 노출 방지를 위해 돌려주지 않음
     }
   }
   return json({ ok: false, error: 'all models failed', tried }, 502);
