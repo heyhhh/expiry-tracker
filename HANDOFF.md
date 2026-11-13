@@ -205,7 +205,7 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 
 **다음 할 일**
 1. 폰에서 v13로 실제 제품 3~5종(앞면 + 날짜면) 촬영 시험 → 오인식 사례 수집 → 프롬프트/모델 순서 조정(`AI_MODELS`).
-2. 이름에 규격/수식어가 붙는 경우(예: "신라면 건면")를 프롬프트로 억제.
+2. ✅ 완료(analyze v8): 이름에 규격/수식어가 붙는 문제를 프롬프트로 억제. 합성 이미지로 확인("신라면 건면 대용량"→"신라면", "딸기맛 우유 신제품"→"딸기맛 우유", 날짜 "26.11.18"→2026-11-18). 실제 포장 사진은 미검증.
 3. Supabase Auth + RLS 도입 후 `ANALYZE_TOKEN` 제거. (현재 공유코드 `Master`는 약함 → 교체 권장)
 4. 서버 푸시 알림(Asia/Seoul 기준; DB 기본 시간대는 이미 `Asia/Seoul`로 변경함).
 5. Supabase MCP는 `.mcp.json`(Git 제외, features: docs,debugging,functions,database)로 연결됨 — 새 세션에서 함수 배포·로그·SQL을 직접 수행 가능. 비밀값 입력은 사용자가 직접.
