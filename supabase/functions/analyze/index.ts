@@ -53,7 +53,8 @@ Deno.serve(async (req) => {
   const token = Deno.env.get('ANALYZE_TOKEN');
   if (!token || req.headers.get('x-admin-token') !== token) return json({ ok: false, error: 'unauthorized' }, 401);
 
-  const key = Deno.env.get('OPENROUTER_API_KEY');
+  // 붙여넣기 실수(앞뒤 공백/줄바꿈, 따옴표, "Bearer " 접두어)를 정리
+  const key = (Deno.env.get('OPENROUTER_API_KEY') || '').trim().replace(/^["']|["']$/g, '').replace(/^Bearer\s+/i, '').trim();
   if (!key) return json({ ok: false, error: 'server key missing' }, 500);
 
   let body: any;
