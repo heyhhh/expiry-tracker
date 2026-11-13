@@ -59,6 +59,30 @@ Deno.serve(async (req) => {
 
   let body: any;
   try { body = await req.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
+  // 사용량/한도 조회: {"action":"quota"} — OpenRouter /api/v1/key 결과 중 안전한 필드만 반환 (label은 키 일부를 포함할 수 있어 제외)
+  if (body.action === 'quota') {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/key', { headers: { Authorization: `Bearer ${key}` } });
+      const j = await r.json().catch(() => ({}));
+      const d = j?.data ?? {};
+      return json({
+        ok: r.ok,
+        http: r.status,
+        is_free_tier: d.is_free_tier,
+        limit: d.limit,
+        limit_remaining: d.limit_remaining,
+        limit_reset: d.limit_reset,
+        usage: d.usage,
+        usage_daily: d.usage_daily,
+        usage_weekly: d.usage_weekly,
+        usage_monthly: d.usage_monthly,
+        rate_limit: d.rate_limit,
+        error: r.ok ? undefined : String(j?.error?.message ?? '').slice(0, 160),
+      }, r.ok ? 200 : 502);
+    } catch (_e) {
+      return json({ ok: false, error: 'quota lookup failed' }, 502);
+    }
+  }
   const images: string[] = (Array.isArray(body.images) ? body.images : [body.image]).filter(Boolean).slice(0, 3);
   if (!images.length) return json({ ok: false, error: 'no image' }, 400);
   for (const im of images) {
