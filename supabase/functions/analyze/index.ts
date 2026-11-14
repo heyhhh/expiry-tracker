@@ -10,26 +10,32 @@ const json = (b: unknown, s = 200) =>
 
 const CATS = ['유제품', '육류', '수산물', '채소/과일', '음료', '과자/간식', '냉동식품', '가공식품', '소스/양념', '의약품', '건강기능식품', '화장품', '생활용품', '기타'];
 const EXP_TYPES = ['소비기한', '유통기한', '사용기한'];
-const DEFAULT_MODELS = 'google/gemma-4-31b-it:free,particle-ai/particle-1:free,google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3.5-super-vl:free';
+const DEFAULT_MODELS = 'google/gemma-4-31b-it:free,particle-ai/particle-1:free,google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3.5-super-vl:free,google/gemini-2.5-flash-lite'; // 무료 모델 먼저, 모두 실패했을 때만 마지막에 유료 flash-lite
+// 비용 보호: 무료(:free) 모델과 지정한 유료 모델 1개만 허용 (AI_MODELS 시크릿·요청에서 다른 유료 모델을 넣어도 사용하지 않음)
+const PAID_ALLOWED = ['google/gemini-2.5-flash-lite'];
+const allowed = (m: string) => m.endsWith(':free') || PAID_ALLOWED.includes(m);
 const MAX_IMAGE_CHARS = 1_800_000; // data URL 길이 상한 (약 1.3MB)
 
-const PROMPT = `당신은 한국 제품(식품, 의약품, 건강기능식품, 화장품, 생활용품 등) 포장 사진을 읽는 도우미입니다. 사진은 1번부터 순서대로 주어집니다.
-- 같은 제품의 앞면/뒷면/날짜 인쇄면이면 하나의 제품으로 합쳐서 한 항목만 만드세요.
-- 서로 다른 제품이 찍혀 있으면(사진이 여러 장이거나, 한 사진에 여러 제품이 있어도) 제품마다 항목을 따로 만드세요.
-- 모든 사진에 실제로 인쇄된 글자만 근거로 하세요. 아래 JSON 하나만 출력하고 설명이나 코드블록은 쓰지 마세요.
+const PROMPT = `당신은 한국·일본 제품(식품, 의약품, 건강기능식품, 화장품, 생활용품 등) 포장 사진을 읽는 도우미입니다. 사진은 1번부터 순서대로 주어집니다.
+- 같은 제품의 앞면/뒷면/날짜 인쇄면이면 하나의 제품으로 합쳐서 한 항목만 만드세요. 서로 다른 제품이면 제품마다 항목을 따로 만드세요.
+- 포장에 실제로 인쇄된 글자만 근거로 하세요. 아래 JSON 하나만 출력하고 설명이나 코드블록은 쓰지 마세요.
 {"items":[
  {
-  "name": "제품명 (포장에 가장 크게 인쇄된 상품 이름만. 한국어 그대로. 용량·규격·부제·설명 문구·홍보 문구(예: 대용량, 1+1, 신제품, 건면, 매운맛 설명)는 제외하되, 맛/종류가 이름의 일부인 경우(예: 딸기맛 우유)는 포함)",
-  "brand": "브랜드 또는 제조사",
-  "category": "${CATS.join(' | ')} 중 하나 (약은 의약품, 영양제·비타민·홍삼 등은 건강기능식품)",
-  "exp_type": "소비기한 | 유통기한 | 사용기한 | null (문구가 보일 때만. 의약품·화장품은 보통 사용기한)",
-  "expiry_text": "사진에 실제로 인쇄된 기한 문구를 보이는 그대로 옮긴 글자 (예: 'EXP 25.08.14', '소비기한 2026.01.09까지'). 기한 날짜가 사진에 인쇄되어 있지 않거나 읽을 수 없으면 반드시 null",
-  "expiry": "expiry_text를 YYYY-MM-DD로 변환한 값. expiry_text가 null이면 반드시 null (날짜를 지어내거나 짐작하지 말 것)",
-  "photo": "이 제품의 포장(앞면)이 가장 잘 보이는 사진의 번호(1부터 시작하는 정수). 모르면 null",
+  "name": "포장 앞면에 가장 크게 인쇄된 상품명을 인쇄된 언어 그대로(일본어면 일본어 원문 그대로). 맛/종류가 이름의 일부면 포함(예: ライチミント味). 용량·홍보 문구는 제외",
+  "name_ko": "name의 한국어 번역 또는 발음 표기. 한글만 사용(가나·한자 금지). 한국어 제품이면 name과 같게",
+  "brand": "브랜드 또는 제조사 (인쇄된 원문 그대로. 예: サクマ, Asahi, 龍角散)",
+  "brand_ko": "brand의 한국어 표기 (예: 사쿠마, 아사히, 류카쿠산). 한국어 브랜드면 brand와 같게",
+  "category": "${CATS.join(' | ')} 중 하나 (사탕·캔디·츄잉껌·민트·타블렛 과자는 과자/간식. 약은 의약품, 영양제·비타민·홍삼 등은 건강기능식품)",
+  "exp_type": "소비기한 | 유통기한 | 사용기한 | null (消費期限=소비기한, 賞味期限=유통기한, 使用期限=사용기한. 문구가 없으면 null)",
+  "expiry_text": "사진에 실제로 인쇄된 기한 날짜 글자를 보이는 그대로 (예: 'EXP 25.08.14', '27年07月', '2027.8'). 기한 날짜가 인쇄되어 있지 않거나 읽을 수 없으면 반드시 null",
+  "expiry": "expiry_text를 YYYY-MM-DD로 변환. 일(日)이 없이 연·월만 인쇄되어 있으면 그 달의 마지막 날로. expiry_text가 null이면 반드시 null",
+  "photo": "이 제품의 포장(앞면)이 가장 잘 보이는 사진 번호(1부터). 모르면 null",
   "confidence": "high | medium | low"
  }
 ]}
-규칙: 보이지 않는 값은 추측하지 말고 null. 기한 날짜는 포장에 인쇄된 것만 사용하고, 사진에 날짜가 없으면 expiry_text와 expiry 모두 null (제품명·용량·바코드·영양성분 숫자를 날짜로 해석하지 말 것). 날짜 표기('YY.MM.DD', 'YYYY/MM/DD', 'DD.MM.YYYY' 등)는 YYYY-MM-DD로 변환. 제조일자와 기한을 혼동하지 말 것. 같은 제품을 중복 항목으로 만들지 말 것.`;
+규칙:
+- 일본 제품 기한은 '賞味期限'/'消費期限' 문구 근처 또는 봉지 윗부분·아랫부분에 인쇄된 날짜입니다. 두 자리 연도('27年07月', '27.07')는 20YY로 해석. '2027.8/B8 2DL', '2027.10/P59 +TP'처럼 날짜 뒤에 붙은 영문·숫자 코드(공장/로트 기호)는 날짜가 아니니 무시하고 앞의 연.월만 사용. 令和 연호는 서기로 변환.
+- 보이지 않는 값은 추측하지 말고 null. 제조일자와 기한을 혼동하지 말 것. 제품명·용량·바코드·영양성분 숫자를 날짜로 해석하지 말 것. 같은 제품을 중복 항목으로 만들지 말 것.`;
 
 function parse(text: string) {
   const m = text.match(/\{[\s\S]*\}/);
@@ -44,17 +50,26 @@ function clean(o: any, imageCount = 0) {
   if (exp) {
     const txt = (s(o.expiry_text) || '').replace(/\D/g, '');
     const m = exp.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    const okText = !!m && txt.length >= 4 && txt.includes(m[1].slice(2)) && txt.includes(m[2]) && txt.includes(m[3]);
+    const full = !!m && txt.length >= 4 && txt.includes(m[1].slice(2)) && txt.includes(m[2]) && txt.includes(m[3]);
+    // 일본 제품처럼 연·월만 인쇄된 경우: 연·월이 원문에 있고 변환값이 그 달의 마지막 날이면 인정
+    const lastDay = m ? new Date(Number(m[1]), Number(m[2]), 0).getDate() : 0;
+    const monthOnly = !!m && txt.length >= 3 && txt.includes(m[1].slice(2)) && txt.includes(String(Number(m[2]))) && Number(m[3]) === lastDay;
+    const okText = full || monthOnly;
     const yr = m ? Number(m[1]) : 0;
     if (!okText || yr < 2000 || yr > 2045) exp = null;
   }
   const barcode = s(o.barcode)?.replace(/\D/g, '') || null;
+  const kana = /[぀-ヿ㐀-鿿]/;
+  const ko = (v: unknown) => { const t = s(v); return t && !kana.test(t) ? t : null; };  // 한글/영문 표기만 인정 (가나·한자가 섞이면 버림)
+  const toType = (v: unknown) => { const t = s(v) || ''; return /賞味|유통/.test(t) ? '유통기한' : /消費|소비/.test(t) ? '소비기한' : /使用|사용/.test(t) ? '사용기한' : null; };
   return {
     name: s(o.name),
+    name_ko: ko(o.name_ko),
     brand: s(o.brand),
+    brand_ko: ko(o.brand_ko),
     category: CATS.includes(o.category) ? o.category : '기타',
     barcode: barcode && /^\d{8,14}$/.test(barcode) ? barcode : null,
-    exp_type: EXP_TYPES.includes(o.exp_type) ? o.exp_type : null,
+    exp_type: EXP_TYPES.includes(o.exp_type) ? o.exp_type : toType(o.exp_type),
     expiry: exp && /^\d{4}-\d{2}-\d{2}$/.test(exp) ? exp : null,
     confidence: ['high', 'medium', 'low'].includes(o.confidence) ? o.confidence : 'low',
     photo: Number.isInteger(Number(o.photo)) && Number(o.photo) >= 1 && Number(o.photo) <= imageCount ? Number(o.photo) : null, // 앱이 이 번호의 사진으로 썸네일을 만든다
@@ -119,8 +134,9 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'invalid or too large image' }, 400);
   }
 
-  const models = (typeof body.models === 'string' && body.models ? body.models : (Deno.env.get('AI_MODELS') || DEFAULT_MODELS))
-    .split(',').map((m: string) => m.trim()).filter(Boolean);
+  let models = (typeof body.models === 'string' && body.models ? body.models : (Deno.env.get('AI_MODELS') || DEFAULT_MODELS))
+    .split(',').map((m: string) => m.trim()).filter((m: string) => m && allowed(m));
+  if (!models.includes(PAID_ALLOWED[0])) models.push(PAID_ALLOWED[0]);   // 무료가 모두 실패했을 때의 마지막 수단
 
   const debug = body.debug === true;
   const tried: { model: string; status: string; raw?: string }[] = [];
