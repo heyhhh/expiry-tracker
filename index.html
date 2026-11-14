@@ -215,7 +215,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v38</p>
+  <p class="hint" id="verInfo">v39</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 10장) -->
@@ -255,7 +255,6 @@ input.bad{outline:2px solid var(--red)}
   <div class="expset" id="expNone" style="display:none"><button type="button" class="btn sm" id="expSet">📅 기한 날짜 설정하기</button><span class="hint">기한을 모르면 이대로 두세요 (기한 없음으로 등록)</span></div>
   <p class="hint" id="expHint" style="margin-top:-4px">숫자만 입력해도 됩니다 (예: 20270305, 270305). 오른쪽 📅를 누르면 달력으로 고를 수 있어요.</p>
   <p class="hint" id="aiNote" style="display:none;color:var(--org)">🤖 AI가 읽은 값입니다. 특히 <b>기한 날짜는 포장과 꼭 대조</b>하세요.</p>
-  <div class="quick" id="quick"></div>
   <label>수량<div class="qtyrow"><button type="button" id="qMinus" aria-label="수량 줄이기">−</button><input type="number" id="fQty" min="1" value="1" inputmode="numeric"><button type="button" id="qPlus" aria-label="수량 늘리기">＋</button></div></label>
   <label>메모<input id="fMemo" placeholder="냉장/냉동, 개봉일 등"></label>
   <div class="btns">
@@ -567,8 +566,6 @@ $('list').onclick = e => {
 
 /* ---------- 폼 ---------- */
 $('fCat').innerHTML = CATS.map(c => `<option>${c}</option>`).join('');
-$('quick').innerHTML = [['+3일',3],['+7일',7],['+14일',14],['+1개월',30],['+3개월',90],['+6개월',180],['+1년',365]]
-  .map(([t,n]) => `<button type="button" data-n="${n}">${t}</button>`).join('');
 // 칸을 누르면 기존 값을 전체 선택 → 바로 덮어쓸 수 있게 (AI가 채운 값을 고칠 때 뒤에 붙던 문제 방지)
 function selectAllSoon(el){ setTimeout(() => { try{ el.select(); el.setSelectionRange(0, el.value.length); }catch{} }, 0); }
 // 입력하는 동안 어떻게 해석되는지 바로 보여줌
@@ -586,7 +583,7 @@ function updateExpHint(){
 let lastRealType = '소비기한';
 function syncExpUI(){
   const none = $('fType').value === NOEXP;
-  $('expLbl').style.display = $('quick').style.display = $('expHint').style.display = none ? 'none' : '';
+  $('expLbl').style.display = $('expHint').style.display = none ? 'none' : '';
   $('expNone').style.display = none ? '' : 'none';
   if (none){ $('fExpT').value = ''; $('fExp').value = ''; $('fExpT').dataset.norm = ''; $('fExpT').classList.remove('bad'); }
   else { lastRealType = $('fType').value; updateExpHint(); }
@@ -608,7 +605,6 @@ $('fExpT').addEventListener('input', () => {
   t.classList.remove('bad'); updateExpHint();
 });
 $('fExp').addEventListener('change', () => { setExp($('fExp').value); saveDraft(); });
-$('quick').onclick = e => { const n = e.target.dataset.n; if (!n) return; const d = today(); d.setDate(d.getDate()+Number(n)); setExp(fmt(d)); saveDraft(); };
 
 /* ---------- 제품 사진(썸네일) ---------- */
 let formPhoto = '';
