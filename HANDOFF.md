@@ -338,3 +338,4 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 ## 34. v36 (확인창/수량 버튼/요약 필터)
 - 수정 화면 다 먹음/폐기는 askConfirm 후 처리, 수량 칸 좌우 −/＋ 버튼(stepQty)
 - 상단 요약 3칸은 버튼: 만료/N일 이내/보관 중 → `view` 상태로 목록 필터(다시 누르면 해제). N일 이내 길게(600ms) 누르면 dSoon 대화상자로 일수 변경, localStorage `soonDays`(기본 3)
+- v37: 📜 처리 기록 각 행의 "↩ 보관중으로" 버튼 → 수량 1·active 새 항목으로 복귀(최초 등록일 유지, 기록은 남김, 로그 item_restore)
