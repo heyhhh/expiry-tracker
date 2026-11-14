@@ -215,7 +215,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v40</p>
+  <p class="hint" id="verInfo">v41</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 10장) -->
@@ -544,7 +544,22 @@ const soonStart = () => { soonLP = false; clearTimeout(soonTimer); soonTimer = s
 const soonCancel = () => clearTimeout(soonTimer);
 { const b = $('sumSoon'); b.addEventListener('pointerdown', soonStart); ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, soonCancel)); b.addEventListener('contextmenu', e => e.preventDefault());
   b.onclick = () => { if (soonLP){ soonLP = false; return; } view = view === 'soon' ? 'all' : 'soon'; render(); }; }
-const setSoon = n => { n = Math.round(Number(n)); if (!(n >= 1 && n <= 365)) return toast('1~365 사이 숫자를 입력해 주세요', 2500); soonDays = n; try{ localStorage.setItem('soonDays', n); }catch{} $('dSoon').close(); render(); toast(`${n}일 이내로 바꿨어요`, 1800); };
+// 'N일 이내' 설정을 계정(로그인 정보의 user_metadata)에 저장해서 같은 계정의 다른 기기와 맞춤 — 나중에 바꾼 쪽이 이김
+const soonAtLocal = () => { try{ return Number(localStorage.getItem('soonAt')) || 0; }catch{ return 0; } };
+async function pushPrefs(){
+  if (!sb || !session) return;
+  try{ const {error} = await sb.auth.updateUser({data:{soon_days:soonDays, soon_at:soonAtLocal()}}); if (error) throw error; }catch{}   // 오프라인이면 다음 동기화 때 다시 시도
+}
+async function pullPrefs(){
+  if (!sb || !session) return;
+  try{
+    const {data, error} = await sb.auth.getUser(); if (error || !data || !data.user) return;
+    const md = data.user.user_metadata || {}, rd = Number(md.soon_days), ra = Number(md.soon_at) || 0, la = soonAtLocal();
+    if (rd >= 1 && rd <= 365 && ra > la){ soonDays = Math.round(rd); try{ localStorage.setItem('soonDays', soonDays); localStorage.setItem('soonAt', ra); }catch{} render(); }
+    else if (la > ra || (!ra && soonDays !== 3)){ if (!la) try{ localStorage.setItem('soonAt', Date.now()); }catch{} await pushPrefs(); }
+  }catch{}
+}
+const setSoon = n => { n = Math.round(Number(n)); if (!(n >= 1 && n <= 365)) return toast('1~365 사이 숫자를 입력해 주세요', 2500); soonDays = n; try{ localStorage.setItem('soonDays', n); localStorage.setItem('soonAt', Date.now()); }catch{} pushPrefs(); $('dSoon').close(); render(); toast(`${n}일 이내로 바꿨어요`, 1800); };
 $('soonOk').onclick = () => setSoon($('soonIn').value); $('soonReset').onclick = () => setSoon(3); $('soonNo').onclick = () => $('dSoon').close();
 $('soonIn').onkeydown = e => { if (e.key === 'Enter'){ e.preventDefault(); setSoon($('soonIn').value); } };
 $('search').oninput = e => { q = e.target.value.trim().toLowerCase(); render(); };
@@ -977,6 +992,7 @@ async function upsertItems(rows){
 let syncTimer; const syncSoon = () => { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 600); };
 async function sync(manual){
   if (!sb || !hh){ if (manual) toast(session ? '그룹를 먼저 선택해 주세요.' : '로그인하면 기기 간 동기화됩니다.'); return; }
+  pullPrefs();
   try{
     const {data, error} = await sb.from('items').select('*').eq('household', hh.id);
     if (error) throw error;
