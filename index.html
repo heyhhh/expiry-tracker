@@ -42,6 +42,11 @@ h1{font-size:19px;margin:0;font-weight:750;letter-spacing:-.03em;white-space:now
 .sum{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;box-shadow:var(--shadow)}
 .sum b{display:block;font-size:24px;line-height:1.1;font-weight:750;letter-spacing:-.03em}
 .sum span{font-size:12px;color:var(--sub)}
+button.sum{font:inherit;color:inherit;text-align:left;width:100%;cursor:pointer;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+button.sum.on{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand)}
+.qtyrow{display:grid;grid-template-columns:48px 1fr 48px;gap:8px;align-items:stretch}
+.qtyrow input{text-align:center;font-weight:700}
+.qtyrow button{border:1px solid var(--line);background:var(--surface2);border-radius:12px;font-size:22px;font-weight:700;cursor:pointer;color:inherit}
 .chips{display:flex;gap:6px;overflow-x:auto;margin-top:12px;padding-bottom:2px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:7px 13px;font-size:14px;cursor:pointer;display:flex;gap:6px;align-items:center;white-space:nowrap}
@@ -181,9 +186,9 @@ input.bad{outline:2px solid var(--red)}
       </div>
     </div>
     <div class="summary">
-      <div class="sum"><b id="sExp" style="color:var(--red)">0</b><span>만료/오늘</span></div>
-      <div class="sum"><b id="sSoon" style="color:var(--org)">0</b><span>3일 이내</span></div>
-      <div class="sum"><b id="sAll">0</b><span>보관 중</span></div>
+      <button type="button" class="sum" id="sumExp"><b id="sExp" style="color:var(--red)">0</b><span>만료/오늘</span></button>
+      <button type="button" class="sum" id="sumSoon" title="길게 누르면 일수를 바꿀 수 있어요"><b id="sSoon" style="color:var(--org)">0</b><span id="soonLbl">3일 이내</span></button>
+      <button type="button" class="sum" id="sumAll"><b id="sAll">0</b><span>보관 중</span></button>
     </div>
     <div class="chips" id="chips"></div>
   </div></aside>
@@ -210,7 +215,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v35</p>
+  <p class="hint" id="verInfo">v36</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 10장) -->
@@ -251,7 +256,7 @@ input.bad{outline:2px solid var(--red)}
   <p class="hint" id="expHint" style="margin-top:-4px">숫자만 입력해도 됩니다 (예: 20270305, 270305). 오른쪽 📅를 누르면 달력으로 고를 수 있어요.</p>
   <p class="hint" id="aiNote" style="display:none;color:var(--org)">🤖 AI가 읽은 값입니다. 특히 <b>기한 날짜는 포장과 꼭 대조</b>하세요.</p>
   <div class="quick" id="quick"></div>
-  <label>수량<input type="number" id="fQty" min="1" value="1" inputmode="numeric"></label>
+  <label>수량<div class="qtyrow"><button type="button" id="qMinus" aria-label="수량 줄이기">−</button><input type="number" id="fQty" min="1" value="1" inputmode="numeric"><button type="button" id="qPlus" aria-label="수량 늘리기">＋</button></div></label>
   <label>메모<input id="fMemo" placeholder="냉장/냉동, 개봉일 등"></label>
   <div class="btns">
     <button type="submit" class="btn pri" id="fSave">저장</button>
@@ -287,6 +292,13 @@ input.bad{outline:2px solid var(--red)}
   <h2 id="cTitle"></h2>
   <p id="cMsg" style="margin:0;color:var(--sub)"></p>
   <div class="btns"><button class="btn" id="cNo">취소</button><button class="btn pri" id="cYes">확인</button></div>
+</div></dialog>
+
+<!-- 임박 일수 설정 (3일 이내 버튼을 길게 누르면) -->
+<dialog id="dSoon"><div class="sheet">
+  <h2>임박 기준 일수</h2>
+  <label>며칠 이내를 임박으로 볼까요? (1~365)<input type="number" id="soonIn" min="1" max="365" inputmode="numeric"></label>
+  <div class="btns"><button class="btn" id="soonNo" type="button">취소</button><button class="btn" id="soonReset" type="button">3일로</button><button class="btn pri" id="soonOk" type="button">저장</button></div>
 </div></dialog>
 
 <!-- 설정 -->
@@ -379,7 +391,8 @@ let items = store.get('items', []);
 const DEFAULTS = {sbUrl:'https://nnrzjgsjwgykafawtimt.supabase.co', sbKey:'sb_publishable_vfmo-2H6jIbNlx6FCezYkw_5ohw1y0n', notiDays:3};
 let cfg = {...DEFAULTS, ...store.get('cfg', {})};
 if (!cfg.sbUrl) cfg.sbUrl = DEFAULTS.sbUrl; if (!cfg.sbKey) cfg.sbKey = DEFAULTS.sbKey;
-let filter = '전체', q = '', editing = null, sb = null;
+let filter = '전체', q = '', editing = null, sb = null, view = 'all';
+let soonDays = (() => { const n = Number(localStorage.getItem('soonDays')); return n >= 1 && n <= 365 ? Math.round(n) : 3; })();
 
 const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
 const hasExp = i => !!(i && i.expiry);
@@ -494,13 +507,16 @@ function syncSortUI(){
 function render(){
   const active = items.filter(i => !i.deleted && i.status === 'active');
   $('sExp').textContent = active.filter(i => hasExp(i) && dday(i.expiry) <= 0).length;
-  $('sSoon').textContent = active.filter(i => { if (!hasExp(i)) return false; const d = dday(i.expiry); return d > 0 && d <= 3; }).length;
+  const isExp = i => hasExp(i) && dday(i.expiry) <= 0, isSoon = i => { if (!hasExp(i)) return false; const d = dday(i.expiry); return d > 0 && d <= soonDays; };
+  $('sSoon').textContent = active.filter(isSoon).length; $('soonLbl').textContent = `${soonDays}일 이내`;
+  $('sumExp').classList.toggle('on', view === 'exp'); $('sumSoon').classList.toggle('on', view === 'soon'); $('sumAll').classList.toggle('on', view === 'all');
   $('sAll').textContent = active.length;
   const cats = ['전체', ...CATS.filter(c => active.some(i => i.category === c))];
   if (!cats.includes(filter)) filter = '전체';
   const count = c => c === '전체' ? active.length : active.filter(i => i.category === c).length;
   $('chips').innerHTML = cats.map(c => `<button class="chip ${c===filter?'on':''}" data-c="${esc(c)}">${c==='전체'?'':(ICONS[c]||'')+' '}${esc(c)} <em>${count(c)}</em></button>`).join('');
   const rows = active
+    .filter(i => view === 'all' || (view === 'exp' ? isExp(i) : isSoon(i)))
     .filter(i => filter === '전체' || i.category === filter)
     .filter(i => !q || [i.name, i.brand, i.memo, i.category].some(v => String(v||'').toLowerCase().includes(q)))
     .sort(sortFn(sortState));
@@ -512,7 +528,7 @@ function render(){
         <div class="m">${nx ? '기한 확인불가' : esc(i.exp_type||'') + ' ' + fmtShort(i.expiry)}${i.memo?' · '+esc(i.memo):''}</div></div>
       <div class="right"><span class="pill ${!nx && d<=0?'solid':''}">${nx ? '기한없음' : label(d)}</span><div class="qty" data-qty="${esc(i.id)}">×${esc(i.qty)}</div></div>
     </div>`; }).join('')
-    : (q || filter !== '전체'
+    : (q || filter !== '전체' || view !== 'all'
         ? `<div class="empty"><div class="big">🔍</div>조건에 맞는 제품이 없습니다.</div>`
         : `<div class="empty"><div class="big">🥫</div>등록된 제품이 없습니다.<br>＋ 버튼으로 제품 사진을 찍어 등록해 보세요.</div>`);
 }
@@ -520,6 +536,16 @@ syncSortUI();
 $('sortSel').onchange = e => { sortState = {f:e.target.value, d:SORT_DEFAULT_DIR[e.target.value]}; store.set('sort', sortState); syncSortUI(); render(); };
 $('sortDir').onclick = () => { sortState = {...sortState, d: sortState.d === 'asc' ? 'desc' : 'asc'}; store.set('sort', sortState); syncSortUI(); render(); };
 $('chips').onclick = e => { const b = e.target.closest('.chip'); if (b){ filter = b.dataset.c; render(); } };
+$('sumExp').onclick = () => { view = view === 'exp' ? 'all' : 'exp'; render(); };
+$('sumAll').onclick = () => { view = 'all'; render(); };
+let soonLP = false, soonTimer = null;
+const soonStart = () => { soonLP = false; clearTimeout(soonTimer); soonTimer = setTimeout(() => { soonLP = true; $('soonIn').value = soonDays; $('dSoon').showModal(); }, 600); };
+const soonCancel = () => clearTimeout(soonTimer);
+{ const b = $('sumSoon'); b.addEventListener('pointerdown', soonStart); ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, soonCancel)); b.addEventListener('contextmenu', e => e.preventDefault());
+  b.onclick = () => { if (soonLP){ soonLP = false; return; } view = view === 'soon' ? 'all' : 'soon'; render(); }; }
+const setSoon = n => { n = Math.round(Number(n)); if (!(n >= 1 && n <= 365)) return toast('1~365 사이 숫자를 입력해 주세요', 2500); soonDays = n; try{ localStorage.setItem('soonDays', n); }catch{} $('dSoon').close(); render(); toast(`${n}일 이내로 바꿨어요`, 1800); };
+$('soonOk').onclick = () => setSoon($('soonIn').value); $('soonReset').onclick = () => setSoon(3); $('soonNo').onclick = () => $('dSoon').close();
+$('soonIn').onkeydown = e => { if (e.key === 'Enter'){ e.preventDefault(); setSoon($('soonIn').value); } };
 $('search').oninput = e => { q = e.target.value.trim().toLowerCase(); render(); };
 async function decQty(id){
   const it = items.find(i => i.id === id); if (!it) return;
@@ -700,8 +726,10 @@ $('form').onsubmit = e => {
   clearFormDraft(); $('dForm').close(); save(); toast(past ? `이전에 등록했던 제품이에요 — 최초 등록일(${dayOf(rec.created_at)})은 유지돼요` : '저장됨', past ? 4000 : 2200); syncSoon();
 };
 function setStatus(s){ if (!editing) return; logEvent(s === 'done' ? 'item_done' : 'item_discarded', {id:editing.id, name:editing.name, reason:'수정 화면'}); items = items.map(i => i.id === editing.id ? {...i, status:s, updated_at:Date.now()} : i); clearFormDraft(); $('dForm').close(); save(); syncSoon(); }
-$('fDone').onclick = () => setStatus('done');
-$('fDiscard').onclick = () => setStatus('discarded');
+$('fDone').onclick = async () => { if (editing && await askConfirm('다 먹음 처리', `'${editing.name}'을(를) 다 먹음으로 처리할까요? 목록에서 빠지고 처리 기록으로 이동해요.`, '다 먹음')) setStatus('done'); };
+$('fDiscard').onclick = async () => { if (editing && await askConfirm('폐기 처리', `'${editing.name}'을(를) 폐기로 처리할까요? 목록에서 빠지고 처리 기록으로 이동해요.`, '폐기')) setStatus('discarded'); };
+const stepQty = d => { const n = Math.max(1, Math.min(9999, (Number($('fQty').value) || 1) + d)); $('fQty').value = n; $('form').dispatchEvent(new Event('input')); };
+$('qMinus').onclick = () => stepQty(-1); $('qPlus').onclick = () => stepQty(1);
 
 
 /* ---------- 작성 중 임시저장 (카메라 앱에 다녀오다 페이지가 다시 불러와져도 유지) ---------- */
