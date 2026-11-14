@@ -215,7 +215,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v37</p>
+  <p class="hint" id="verInfo">v38</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 10장) -->
@@ -315,7 +315,7 @@ input.bad{outline:2px solid var(--red)}
   <p class="hint">알림은 앱을 열었을 때 만료 임박 제품을 알려줍니다.</p>
   <div class="btns"><button class="btn" id="btnLeave">그룹 나가기</button><button class="btn" id="btnLogout">로그아웃</button><button class="btn" id="setClose">닫기</button></div>
   <hr class="sep">
-  <div class="btns"><button class="btn" id="btnHist">📜 처리 기록</button><button class="btn" id="btnLogs">📋 활동 로그</button></div>
+  <div class="btns"><button class="btn" id="btnHist">📜 다 먹음/폐기 목록</button><button class="btn" id="btnLogs">📋 활동 로그</button></div>
   <p class="hint">수량이 0이 되어 처리한 제품의 기록과, 등록·수정·수량 변경·오류 로그를 볼 수 있어요.</p>
   <div class="btns"><button class="btn" id="btnBackup">☁ 지금 백업</button><button class="btn" id="btnRestore">↩ 백업에서 복원</button></div>
   <p class="hint" id="bkInfo">서버에 목록 사본을 저장합니다. 하루에 한 번 자동으로도 백업되고, 최근 150개를 보관해요.</p>
@@ -325,8 +325,10 @@ input.bad{outline:2px solid var(--red)}
 
 <!-- 처리 기록 -->
 <dialog id="dHist"><div class="sheet">
-  <div class="sethead"><h2>처리 기록</h2><button type="button" class="xbtn" id="histX" aria-label="닫기">✕</button></div>
-  <p class="hint">수량이 0이 되어(다 먹음·폐기) 메인 목록에서 빠진 제품의 기록입니다. 우리 그룹 멤버만 볼 수 있어요.</p>
+  <div class="sethead"><h2>다 먹음 / 폐기 목록</h2><button type="button" class="xbtn" id="histX" aria-label="닫기">✕</button></div>
+  <p class="hint">다 먹음·폐기로 메인 목록에서 빠진 제품입니다. ↩ 버튼으로 수량 1개의 보관 중 상태로 되돌릴 수 있어요. 우리 그룹 멤버만 볼 수 있어요.</p>
+  <div class="seg" id="histTabs"><button type="button" class="chip on" data-f="all">전체</button><button type="button" class="chip" data-f="consumed">다 먹음</button><button type="button" class="chip" data-f="discarded">폐기</button></div>
+  <input type="search" id="histQ" placeholder="제품 검색" autocomplete="off">
   <div id="histList" class="bklist"></div>
 </div></dialog>
 
@@ -1093,11 +1095,21 @@ $('btnHist').onclick = async () => {
   const box = $('histList'); box.innerHTML = '<p class="hint">불러오는 중…</p>'; $('dHist').showModal();
   const {data, error} = await sb.from('item_history').select('item_id,reason,ended_at,data').eq('household', hh.id).order('ended_at', {ascending:false}).limit(200);
   if (error){ box.innerHTML = `<p class="hint" style="color:var(--red)">${/item_history|schema cache|PGRST205|42P01/i.test(String(error.message)) ? '처리 기록 테이블이 아직 없습니다. supabase/history_logs.sql을 먼저 실행해 주세요.' : '불러오지 못했습니다.'}</p>`; return; }
-  histRows = data;
-  box.innerHTML = data.length ? data.map(h => { const d = h.data || {};
-    return `<div class="bkrow"><div><b>${esc(d.name || '(이름 없음)')}</b><small>${esc([d.brand, d.category].filter(Boolean).join(' · '))}${d.expiry ? ' · 기한 ' + esc(d.expiry) : ''}</small></div><div style="text-align:right"><b>${esc(HIST_LABEL[h.reason] || h.reason)}</b><small>${esc(bkFmt(h.ended_at))}</small><button type="button" class="btn sm" data-restore="${esc(h.item_id)}" style="margin-top:4px;padding:5px 10px;font-size:13px">↩ 보관중으로</button></div></div>`; }).join('')
-    : '<p class="hint">아직 처리 기록이 없어요. 수량이 0이 되면 여기에 보관됩니다.</p>';
+  histRows = data; histF = 'all'; $('histQ').value = ''; renderHist();
 };
+let histF = 'all';
+function renderHist(){
+  const box = $('histList'), qq = $('histQ').value.trim().toLowerCase();
+  document.querySelectorAll('#histTabs .chip').forEach(c => c.classList.toggle('on', c.dataset.f === histF));
+  const act = items.filter(i => !i.deleted && i.status === 'active');
+  const back = h => { const d = h.data || {}, c = Number(d.created_at || d.updated_at) || 0; return act.some(i => createdOf(i) === c && String(i.name || '').trim().toLowerCase() === String(d.name || '').trim().toLowerCase() && String(i.brand || '').trim().toLowerCase() === String(d.brand || '').trim().toLowerCase()); };
+  const rows = histRows.filter(h => (histF === 'all' || h.reason === histF) && (!qq || [h.data && h.data.name, h.data && h.data.brand].some(v => String(v || '').toLowerCase().includes(qq))));
+  box.innerHTML = rows.length ? rows.map(h => { const d = h.data || {}, bk = back(h);
+    return `<div class="bkrow"><div><b>${esc(d.name || '(이름 없음)')}</b><small>${esc([d.brand, d.category].filter(Boolean).join(' · '))}${d.expiry ? ' · 기한 ' + esc(d.expiry) : ''}</small></div><div style="text-align:right"><b>${esc(HIST_LABEL[h.reason] || h.reason)}</b><small>${esc(bkFmt(h.ended_at))}</small>${bk ? '<small style="color:var(--grn)">보관 중으로 복귀함</small>' : `<button type="button" class="btn sm" data-restore="${esc(h.item_id)}" style="margin-top:4px;padding:5px 10px;font-size:13px">↩ 보관중으로</button>`}</div></div>`; }).join('')
+    : '<p class="hint">해당하는 제품이 없어요. 다 먹음·폐기 처리하면 여기에 보관됩니다.</p>';
+}
+$('histTabs').onclick = e => { const b = e.target.closest('.chip'); if (b){ histF = b.dataset.f; renderHist(); } };
+$('histQ').oninput = renderHist;
 $('histX').onclick = () => $('dHist').close();
 // 처리 기록의 제품을 수량 1로 다시 보관 중 목록에 되돌림 (새 항목으로 만들되 최초 등록일은 유지, 처리 기록은 그대로 남김)
 $('histList').onclick = async e => {
@@ -1108,7 +1120,7 @@ $('histList').onclick = async e => {
   const now = Date.now(), rec = {...d, id:uid(), qty:1, status:'active', deleted:false, created_at:Number(d.created_at || d.updated_at) || now, updated_at:now};
   delete rec.household;
   items = [...items, rec]; save(); syncSoon(); logEvent('item_restore', {id:rec.id, name:rec.name, from:HIST_LABEL[h.reason] || h.reason, qty:1});
-  b.disabled = true; b.textContent = '복귀 완료'; toast(`${rec.name} — 보관 중으로 돌아왔어요`, 2200);
+  renderHist(); toast(`${rec.name} — 보관 중으로 돌아왔어요`, 2200);
 };
 
 /* ---------- 활동 로그 보기 ---------- */
