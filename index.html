@@ -215,7 +215,7 @@ input.bad{outline:2px solid var(--red)}
   <button class="btn pri" id="addAi">📸 제품 사진으로 AI 분석</button>
   <button class="btn" id="addManual">✍️ 수동 등록</button>
   <button class="btn" id="addClose">닫기</button>
-  <p class="hint" id="verInfo">v41</p>
+  <p class="hint" id="verInfo">v42</p>
 </div></dialog>
 
 <!-- 사진 모으기 (최대 10장) -->
@@ -1409,6 +1409,30 @@ function checkAlerts(){
 }
 
 /* ---------- 시작 ---------- */
+/* ---------- 뒤로가기 버튼: 열린 창(대화상자)이 있으면 앱이 아니라 그 창만 닫기 (안드로이드 앱·PWA 공통) ---------- */
+{
+  const stack = []; let pushed = 0, skip = 0;
+  const orig = HTMLDialogElement.prototype.showModal;
+  HTMLDialogElement.prototype.showModal = function(){
+    orig.call(this);
+    if (!stack.includes(this)){ stack.push(this); pushed++; try{ history.pushState({dlg:1}, ''); }catch{} }
+  };
+  document.addEventListener('close', e => {
+    const i = stack.indexOf(e.target); if (i < 0) return;     // 뒤로가기로 닫힌 경우는 이미 처리됨
+    stack.splice(i, 1);
+    const excess = pushed - stack.length;                     // 코드로 닫은 창의 기록 항목을 되돌림
+    if (excess > 0){ pushed -= excess; skip += excess; try{ history.go(-excess); }catch{ skip -= excess; } }
+  }, true);
+  window.addEventListener('popstate', () => {
+    if (skip > 0){ skip--; return; }
+    const top = stack.pop(); if (!top) return;
+    // Esc와 같은 취급: 닫기를 막아 둔 창(로그인·그룹 선택 등)은 그대로 두고 기록만 복구
+    const ev = new Event('cancel', {cancelable:true}); top.dispatchEvent(ev);
+    if (ev.defaultPrevented || !top.open){ stack.push(top); try{ history.pushState({dlg:1}, ''); }catch{} return; }
+    pushed = Math.max(0, pushed - 1);
+    top.close();
+  });
+}
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 initSb(); render();
 (async () => {

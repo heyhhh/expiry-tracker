@@ -348,3 +348,4 @@ python -m http.server 8765      # 프로젝트 폴더에서. http://localhost:87
 - 앱: 이름·브랜드는 한국어 표기로 저장, 원문은 메모("원문: …"), 이미지 검색은 한국어 → 원문 순
 - 시험(2026-11-14): 일본 제품 3종, 프롬프트 개선 후 4개 모델 모두 날짜 정확, 이름은 3.6-flash > 3.1-flash-lite ≈ 2.5-flash > 2.5-flash-lite. 임시 함수 modeltest는 410 스텁으로 교체(대시보드에서 삭제 가능)
 - v41: "N일 이내"(soonDays)를 계정 user_metadata(soon_days, soon_at)에 저장해 기기 간 동기화(pullPrefs/pushPrefs, sync 시 확인, 나중에 바꾼 쪽 우선). DB 변경 없음
+- v42: 안드로이드 뒤로가기 버튼이 열린 창(dialog)만 닫도록 history 스택 연동(showModal 패치+popstate, cancel 막은 dAuth/dHouse는 유지). APK 재빌드 필요
